@@ -16,9 +16,6 @@
                 "${workspaceFolder}/**/*.js"
             ],
             "env": {
-                "OPENAI_API_KEY":"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",
-                "SUPABASE_URL":"https://munazvfqtkyrhqqfenjb.supabase.co",
-                "SUPABASE_KEY":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im11bmF6dmZxdGt5cmhxcWZlbmpiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzExMzg1NDksImV4cCI6MjA0NjcxNDU0OX0.XAvVCRGm7qMJgHROmnAX-u1QQIODumwzfvOL-kHWG5E"
             }
         }
     ]
