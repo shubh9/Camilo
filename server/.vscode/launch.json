@@ -7,7 +7,7 @@
             "name": "Debug Process Paragraphs",
             "skipFiles": ["<node_internals>/**"],
             "program": "${workspaceFolder}/scripts/processParagraphsWithOverlap.js",
-            "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}",
         }
     ]
 } 

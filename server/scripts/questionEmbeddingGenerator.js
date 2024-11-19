@@ -18,11 +18,11 @@ async function processInBatches(items, batchSize = 100) {
     return batches;
 }
 
-async function saveToSupabase(paragraphs) {
+async function saveToSupabase(qaData) {
     try {
         const { data, error } = await supabase
-            .from('shubhsblogs')
-            .insert(paragraphs);
+            .from('questionanswer')
+            .insert(qaData);
 
         if (error) throw error;
         return data;
@@ -34,54 +34,53 @@ async function saveToSupabase(paragraphs) {
 
 async function main() {
     try {
-        // Read the processed articles
-        const filePath = path.join(__dirname, '..', 'data', 'processed_segments_2024-11-08-23-40.json');
-        const fileContent = await fs.readFile(filePath, 'utf8');
-        const segments = JSON.parse(fileContent);
 
-        console.log(`Processing ${segments.length} segments...`);
+        const filePath = path.join(__dirname, '..', 'data', 'answered_questions_manual.json');
+        const fileContent = await fs.readFile(filePath, 'utf8');
+        const questionContent = JSON.parse(fileContent);
+
+        console.log(`Processing ${questionContent.length} questions...`);
 
         // Process in batches to avoid rate limits and memory issues
-        const batches = await processInBatches(segments);
+        const batches = await processInBatches(questionContent);
         let processedCount = 0;
 
         for (const batch of batches) {
-            const embeddingsData = [];
+            const qaData = [];
 
-            // Generate embeddings for each segment in the batch
-            for (const segment of batch) {
+            // Generate embeddings for each question in the batch
+            for (const qaElement of batch) {
                 try {
-                    const embedding = await aiService.generateEmbedding(segment.content);
+                    const questionVec = await aiService.generateEmbedding(qaElement.question);
                     
-                    embeddingsData.push({
-                        url: segment.url,
-                        title: segment.title,
-                        content: segment.content,
-                        segment: segment.segment,
-                        embedding
+                    qaData.push({
+                        question: qaElement.question,
+                        questionVec: questionVec,
+                        answer: qaElement.answer || null,
+                        relevantSegments: qaElement.ids || []
                     });
 
                     processedCount++;
                     if (processedCount % 10 === 0) {
-                        console.log(`Processed ${processedCount}/${segment.length} segments`);
+                        console.log(`Processed ${processedCount}/${questionContent.length} questions`);
                     }
 
                     // Small delay to respect rate limits
                     await new Promise(resolve => setTimeout(resolve, 200));
                 } catch (error) {
-                    console.error(`Failed to process segment ${segment.segment} from ${segment.url}:`, error);
+                    console.error(`Failed to process question: ${qaElement.question}:`, error);
                 }
             }
 
             // Save batch to Supabase
-            if (embeddingsData.length > 0) {
-                await saveToSupabase(embeddingsData);
-                console.log(`Saved batch of ${embeddingsData.length} embeddings to Supabase`);
+            if (qaData.length > 0) {
+                await saveToSupabase(qaData);
+                console.log(`Saved batch of ${qaData.length} questions to Supabase`);
             }
         }
 
         console.log('\nProcessing completed successfully!');
-        console.log(`Total segments processed: ${processedCount}`);
+        console.log(`Total questions processed: ${processedCount}`);
 
     } catch (error) {
         console.error('Error in main process:', error);

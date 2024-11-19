@@ -18,11 +18,11 @@ async function processInBatches(items, batchSize = 100) {
     return batches;
 }
 
-async function saveToSupabase(paragraphs) {
+async function saveToSupabase(conversationData) {
     try {
         const { data, error } = await supabase
-            .from('shubhsblogs')
-            .insert(paragraphs);
+            .from('conversations')
+            .insert(conversationData);
 
         if (error) throw error;
         return data;
@@ -32,56 +32,61 @@ async function saveToSupabase(paragraphs) {
     }
 }
 
+async function extractUserMessages(conversation) {
+    return conversation.conversation
+        .filter(msg => !msg.isAI)
+        .map(msg => msg.content)
+        .join(' ');
+}
+
 async function main() {
     try {
-        // Read the processed articles
-        const filePath = path.join(__dirname, '..', 'data', 'processed_segments_2024-11-08-23-40.json');
+        const filePath = path.join(__dirname, '..', 'data', 'conversation');
         const fileContent = await fs.readFile(filePath, 'utf8');
-        const segments = JSON.parse(fileContent);
+        const conversations = JSON.parse(fileContent);
 
-        console.log(`Processing ${segments.length} segments...`);
+        console.log(`Processing ${conversations.length} conversations...`);
 
         // Process in batches to avoid rate limits and memory issues
-        const batches = await processInBatches(segments);
+        const batches = await processInBatches(conversations);
         let processedCount = 0;
 
         for (const batch of batches) {
-            const embeddingsData = [];
+            const conversationData = [];
 
-            // Generate embeddings for each segment in the batch
-            for (const segment of batch) {
+            // Generate embeddings for each conversation in the batch
+            for (const conversation of batch) {
                 try {
-                    const embedding = await aiService.generateEmbedding(segment.content);
+                    // Concatenate all non-AI messages and generate embedding
+                    const userMessages = await extractUserMessages(conversation);
+                    const embedding = await aiService.generateEmbedding(userMessages);
                     
-                    embeddingsData.push({
-                        url: segment.url,
-                        title: segment.title,
-                        content: segment.content,
-                        segment: segment.segment,
-                        embedding
+                    conversationData.push({
+                        content: conversation,
+                        embedding: embedding
                     });
 
                     processedCount++;
                     if (processedCount % 10 === 0) {
-                        console.log(`Processed ${processedCount}/${segment.length} segments`);
+                        console.log(`Processed ${processedCount}/${conversations.length} conversations`);
                     }
 
                     // Small delay to respect rate limits
                     await new Promise(resolve => setTimeout(resolve, 200));
                 } catch (error) {
-                    console.error(`Failed to process segment ${segment.segment} from ${segment.url}:`, error);
+                    console.error('Failed to process conversation:', error);
                 }
             }
 
             // Save batch to Supabase
-            if (embeddingsData.length > 0) {
-                await saveToSupabase(embeddingsData);
-                console.log(`Saved batch of ${embeddingsData.length} embeddings to Supabase`);
+            if (conversationData.length > 0) {
+                await saveToSupabase(conversationData);
+                console.log(`Saved batch of ${conversationData.length} conversations to Supabase`);
             }
         }
 
         console.log('\nProcessing completed successfully!');
-        console.log(`Total segments processed: ${processedCount}`);
+        console.log(`Total conversations processed: ${processedCount}`);
 
     } catch (error) {
         console.error('Error in main process:', error);

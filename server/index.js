@@ -16,41 +16,34 @@ const supabase = createClient(
 app.use(cors());
 app.use(express.json());
 
-async function findSimilarSegments(embedding) {
-    const { data, error } = await supabase.rpc('match_segments', {
-        query_embedding: embedding,
-        match_threshold: 0.2,
-        match_count: 5
-    });
-
-    if (error) throw error;
-    return data;
-}
-
 app.post('/message', async (req, res) => {
-    const { message } = req.body;
+    const { messages } = req.body;
+    // Filter to get only user messages
+    const userMessages = messages.filter(message => message.isAI === false);
+    // Get the last 4 user messages
+    const lastUserMessages = userMessages.slice(-4);
     
     try {
-        // 1. Generate embedding for the user's message
-        console.log('Generating embedding for:', message);
-        const embedding = await aiService.generateEmbedding(message);
-
-        // 2. Find similar segments in Supabase
-        console.log('Finding similar segments...');
-        const similarSegments = await findSimilarSegments(embedding);
-
-        // 3. Generate response using OpenAI with context
+        // Get relevant context using the new method
+        const { allSegments, topSimilarQuestions, topSimilarConversations } = await aiService.getRelevantContext(lastUserMessages.map(msg => msg.content));
+        
         console.log('Generating response with context...');
-        const reply = await aiService.createChatCompletion(message, similarSegments);
-        console.log(`Complete: ${reply}`);
+        const reply = await aiService.createChatCompletion(
+            messages,
+            allSegments,
+            topSimilarQuestions,
+            topSimilarConversations
+        );
 
-        // 4. Send response
+        // Extract unique segment IDs and URLs from the context segments
+        const linkData = allSegments.reduce((acc, segment) => {
+            acc[segment.id] = segment.url;
+            return acc;
+        }, {});
+
         res.json({ 
             reply,
-            context: similarSegments.map(seg => ({
-                content: seg.content.substring(0, 150) + '...',
-                similarity: seg.similarity
-            }))
+            linkData
         });
 
     } catch (error) {

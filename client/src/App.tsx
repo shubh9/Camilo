@@ -1,5 +1,9 @@
 import React, { useState } from 'react';
 import styled from 'styled-components';
+import VerticalGradient from './components/VerticalGradient';
+import HorizontalGradient from './components/HorizontalGradient';
+import CircularGradient from './components/CircularGradient';
+import LoadingDots from './components/LoadingDots';
 
 // Color variables
 const mitRed = '#750014';
@@ -13,12 +17,24 @@ const buttonBlue = '#007bff';
 const buttonHoverBlue = '#0056b3';
 const shadowColor = 'rgba(0, 0, 0, 0.1)';
 
+// Gradient colors
+const gradientStartLightOrange = '#FFEAD6';
+const gradientEndDarkOrange = '#F8B585';
+
 // Styled Components
 const AppContainer = styled.div`
-  height: 100vh;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background-color: ${black};
+  overflow-y: auto;
+  background: linear-gradient(to bottom, ${gradientStartLightOrange}, ${gradientEndDarkOrange});
+  * {
+    user-select: text;
+  }
 `;
 
 const ChatContainer = styled.div`
@@ -26,18 +42,16 @@ const ChatContainer = styled.div`
   display: flex;
   flex-direction: column;
   max-width: 800px;
+  width: 80%;
   margin: 0 auto;
-  width: 100%;
-  padding: 20px;
+  padding-left: 10px;
+  padding-right: 10px;
+  padding-bottom: 10px;
 `;
 
 const MessagesContainer = styled.div`
   flex: 1;
   overflow-y: auto;
-  margin-bottom: 20px;
-  padding: 20px;
-  background-color: ${darkGrey};
-  border-radius: 8px;
 `;
 
 const Message = styled.div`
@@ -46,32 +60,52 @@ const Message = styled.div`
   margin-bottom: 10px;
   max-width: 70%;
   word-wrap: break-word;
-  box-shadow: 0 1px 2px ${shadowColor};
+  line-height: 1.4;
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
 `;
 
 const InputContainer = styled.form`
-  display: flex;
-  gap: 10px;
+  position: relative;
+  width: 100%;
 `;
 
-const MessageInput = styled.input`
-  flex: 1;
+const MessageInput = styled.textarea`
+  width: 100%;
+  height: 24px;
+  min-height: 24px;
   padding: 12px;
   border: 1px solid ${inputBorderGrey};
-  border-radius: 4px;
   font-size: 16px;
-  background-color: ${inputBackgroundGrey};
-  color: ${white};
+  background-color: ${white}33;
+  color: ${black};
+  resize: none;
+  line-height: 1.5;
+  overflow: hidden;
+  font-family: 'Inter', sans-serif;
+  border-radius: 20px;
+    &:focus {
+    outline: none;
+  }
 `;
 
 const SendButton = styled.button`
-  padding: 12px 24px;
-  background-color: ${mitGrey};
-  color: ${white};
+  position: absolute;
+  right: -20px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  background-image: url('/arrow_up.png');
+  background-color: transparent;
+  background-size: 24px;
+  background-position: center;
+  background-repeat: no-repeat;
   border: none;
-  border-radius: 4px;
   cursor: pointer;
-  font-size: 16px;
+  opacity: ${props => props.disabled ? 0 : 1};
+  transition: opacity 0.5s ease-in-out;
 
   &:hover {
     background-color: ${buttonHoverBlue};
@@ -80,51 +114,98 @@ const SendButton = styled.button`
 
 // Add a new styled component for hyperlinks
 const MessageLink = styled.a`
-  color: ${mitGrey};
+  color: ${black}66;
   text-decoration: underline;
   cursor: pointer;
+  position: relative;
+  z-index: 3;
+  pointer-events: auto;
   
   &:hover {
-    color: ${white};
+    color: ${black};
   }
 `;
 
 // Types
 interface Message {
-  text: string;
-  isBot: boolean;
-  links?: { [key: number]: string }; // Map of reference numbers to URLs
+  content: string;
+  isAI: boolean;
+  links?: { [key: number]: string };
 }
 
 // Constants
 export const serverUrl = 'http://localhost:3001';
 
+const AIMessage = styled(Message)`
+  margin-left: 0;
+  background-color: transparent;
+  color: ${black};
+  z-index: 1;
+`;
+
+const UserMessage = styled(Message)`
+  margin-left: auto;
+  background-color: ${white}55;
+  color: ${black};
+  z-index: 1;
+`;
+
+// Styled Components
+const Title = styled.h1`
+  text-align: center;
+  color: ${black}bb;
+  margin-top: 20px;
+`;
+
+// Add this new styled component after other styled components and before the App function
+const LoadingDotsContainer = styled.div`
+  margin-left: -25%;
+  margin-top: 20px;
+  padding: 10px 15px;
+  border-radius: 8px;
+  max-width: 70%;
+  word-wrap: break-word;
+  line-height: 1.4;
+`;
+
 // Main Component
 function App() {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      content: "Hello! I'm Shubh, your personal AI assistant. How can I help you today?",
+      isAI: true
+    },
+    {
+      content: "I'm here to help you with any questions or tasks you need. What would you like to discuss?",
+      isAI: false
+    }
+  ]);  
   const [inputMessage, setInputMessage] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const processResponseText = (text: string): { processedText: string; links: { [key: number]: string } } => {
+  const processResponseText = (text: string, linkData: { [key: string]: string }): { processedText: string; links: { [key: number]: string } } => {
     const links: { [key: number]: string } = {};
     let linkCounter = 1;
+    const idToNumberMap: { [key: string]: number } = {};
     const urlToNumberMap: { [key: string]: number } = {};
 
-    // Replace URLs in brackets with numbered links
-    const processedText = text.replace(/\[([^\]]+)]/g, (match, url) => {
-      // Skip if it's not a URL
-      if (!url.startsWith('http')) return match;
+    // Replace segment IDs with sequential numbers
+    const processedText = text.replace(/\[(\d+)]/g, (match, segmentId) => {
+        const url = linkData[segmentId];
 
-      // If we've seen this URL before, use its existing number
-      if (urlToNumberMap[url]) {
-        return `[${urlToNumberMap[url]}]`;
-      }
+        // Check if this URL has already been assigned a number
+        if (urlToNumberMap[url]) {
+            idToNumberMap[segmentId] = urlToNumberMap[url];
+            return `[${urlToNumberMap[url]}]`;
+        }
 
-      // Otherwise, assign a new number
-      urlToNumberMap[url] = linkCounter;
-      links[linkCounter] = url;
-      linkCounter++;
+        // Otherwise, assign a new number and store the URL
+        idToNumberMap[segmentId] = linkCounter;
+        urlToNumberMap[url] = linkCounter;
+        links[linkCounter] = url;
+        linkCounter++;
 
-      return `[${urlToNumberMap[url]}]`;
+        return `[${idToNumberMap[segmentId]}]`;
     });
 
     return { processedText, links };
@@ -157,9 +238,13 @@ function App() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('Submitting message:', inputMessage);
     if (inputMessage.trim()) {
-      setMessages(prev => [...prev, { text: inputMessage, isBot: false }]);
+      // Add user message to chat
+      const userMessage = { content: inputMessage, isAI: false };
+      setMessages(prev => [...prev, userMessage]);
       setInputMessage('');
+      setLoading(true); // Set loading to true
       
       try {
         const response = await fetch(`${serverUrl}/message`, {
@@ -167,54 +252,85 @@ function App() {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ message: inputMessage }),
+          body: JSON.stringify({ 
+            messages: [...messages, userMessage]
+          }),
         });
         
         const data = await response.json();
         
-        // Process the response text to replace URLs with numbered links
-        const { processedText, links } = processResponseText(data.reply);
+        // Process the response text to replace segment ids with numbered links
+        const { processedText, links } = processResponseText(data.reply, data.linkData);
         
         setMessages(prev => [...prev, { 
-          text: processedText, 
-          isBot: true,
+          content: processedText, 
+          isAI: true,
           links 
         }]);
       } catch (error) {
         console.error('Error:', error);
+      } finally {
+        setLoading(false); // Set loading to false after response
       }
     }
   };
 
+  // suggested questions:
+  // How did your early experiences with coding shape your approach to problem-solving in your current projects?
+
+
   return (
     <AppContainer>
+      <VerticalGradient />
+      <HorizontalGradient />
+      <CircularGradient />
+      <Title>Chat with Shubh</Title>
       <ChatContainer>
         <MessagesContainer>
           {messages.map((message, index) => (
-            <Message 
-              key={index}
-              style={{
-                marginLeft: message.isBot ? '0' : 'auto',
-                backgroundColor: message.isBot ? mitRed : mitGrey,
-                color: message.isBot ? white : black,
-              }}
-            >
-              {message.isBot 
-                ? renderMessageWithLinks(message.text, message.links)
-                : message.text}
-            </Message>
+            message.isAI ? (
+              <AIMessage key={index}>
+                {renderMessageWithLinks(message.content, message.links)}
+              </AIMessage>
+            ) : (
+              <UserMessage key={index}>
+                {message.content}
+              </UserMessage>
+            )
           ))}
+          {loading && (
+            <LoadingDotsContainer>
+              <LoadingDots />
+            </LoadingDotsContainer>
+          )}
         </MessagesContainer>
         <InputContainer onSubmit={handleSubmit}>
           <MessageInput
-            type="text"
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
-            placeholder="Type a message..."
+            placeholder="Message"
+            rows={1}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (inputMessage.trim()) {
+                  handleSubmit(e);
+                }
+              }
+            }}
+            onInput={(e) => {
+              const target = e.target as HTMLTextAreaElement;
+              target.style.height = '24px';
+              const newHeight = target.scrollHeight;
+              if (newHeight > 48) {
+                target.style.height = newHeight + 'px';
+              }
+            }}
           />
-          <SendButton type="submit">
-            Send
-          </SendButton>
+          <SendButton 
+            type="submit"
+            disabled={!inputMessage.trim()}
+          />
         </InputContainer>
       </ChatContainer>
     </AppContainer>
