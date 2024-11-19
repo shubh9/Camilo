@@ -8,8 +8,6 @@
             "skipFiles": ["<node_internals>/**"],
             "program": "${workspaceFolder}/scripts/processParagraphsWithOverlap.js",
             "cwd": "${workspaceFolder}",
-            "env": {
-            }
         }
     ]
 } 

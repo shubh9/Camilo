@@ -15,8 +15,6 @@
             "outFiles": [
                 "${workspaceFolder}/**/*.js"
             ],
-            "env": {
-            }
         }
     ]
 }
