@@ -10,27 +10,60 @@ const supabase = createClient(
     process.env.SUPABASE_KEY
 );
 
-async function findSimilarSegments(embedding) {
-    const { data, error } = await supabase.rpc('match_segments', {
-        query_embedding: embedding,
-        match_threshold: 0.2,
-        match_count: 4
-    });
+async function getSegmentsByUrl(url) {
+    try {
+        const { data, error } = await supabase
+            .from('shubhsblogs') // Replace 'segments' with your actual table name
+            .select('*')
+            .eq('url', url);
 
-    if (error) throw error;
-    return data;
+        if (error) {
+            throw error;
+        }
+
+        return data;
+    } catch (error) {
+        console.error('Error fetching segments by URL:', error);
+        throw error;
+    }
 }
 
-async function generateAnswer(question, articleContent, articleUrl, similarSegments) {
+async function generateAnswer(question, articleUrl) {
     try {
-        // Combine article content with similar segments
-        const combinedContext = [
-            { content: articleContent, url: articleUrl },
-            ...similarSegments
-        ];
+        // Get relevant context using the new method
+        const { allSegments, topSimilarQuestions, topSimilarConversations } = await aiService.getRelevantContext(question);
+        
+        // Add the article content as an additional context
+        const currArticleSegments = await getSegmentsByUrl(articleUrl);
+        allSegments.unshift(...currArticleSegments);
 
-        const answer = await aiService.createChatCompletion(question, combinedContext);
-        return answer;
+        // Generate the answer using all available context
+        const answer = await aiService.createChatCompletion(
+            question, 
+            allSegments,
+            topSimilarQuestions,
+            topSimilarConversations
+        );
+
+        // Extract segment references like [n] from the answer
+        const ids = [];
+        const regex = /\[(\d+)\]/g;
+        let match;
+        while ((match = regex.exec(answer)) !== null) {
+            const id = match[1];
+            if (!ids.includes(id)) {
+                ids.push(id);
+            }
+        }
+
+        // Remove the segment references from the answer
+        const cleanedAnswer = answer.replace(regex, '');
+
+        return {
+            question,
+            answer: cleanedAnswer,
+            ids
+        };
     } catch (error) {
         console.error('Error generating answer:', error);
         throw error;
@@ -50,36 +83,25 @@ async function main() {
         const questionsAndAnswers = [];
 
         for (const article of articlesWithQuestions) {
-            
-            for (const question of article.questions) {
+            for (const articleQuestion of article.questions) {
                 try {
-                    // Generate embedding for the question
-                    const embedding = await aiService.generateEmbedding(question);
+                    console.log(`Processing question: ${articleQuestion}`);
                     
-                    // Find similar segments using RAG
-                    const similarSegments = await findSimilarSegments(embedding);
-                    
-                    // Generate answer using both original content and similar segments
-                    const answer = await generateAnswer(
-                        question, 
-                        article.content, 
-                        article.url,
-                        similarSegments
+                    const { question, answer, ids } = await generateAnswer(
+                        articleQuestion, 
+                        article.url
                     );
 
                     questionsAndAnswers.push({
                         question,
-                        answer
+                        answer,
+                        ids
                     });
-                    
 
                     totalQuestionsProcessed++;
                     console.log(`Processed question ${totalQuestionsProcessed}: ${question}`);
-
-                    // Add delay to respect rate limits
-                    await new Promise(resolve => setTimeout(resolve, 1000));
                 } catch (error) {
-                    console.error(`Failed to process question: ${question}`, error);
+                    console.error(`Failed to process question: ${articleQuestion}`, error);
                 }
             }
         }

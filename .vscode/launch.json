@@ -1,13 +1,20 @@
 {
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
         {
             "type": "node",
             "request": "launch",
-            "name": "Debug Process Paragraphs",
-            "skipFiles": ["<node_internals>/**"],
-            "program": "${workspaceFolder}/scripts/processParagraphsWithOverlap.js",
-            "cwd": "${workspaceFolder}",
+            "name": "Launch Program",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "program": "${workspaceFolder}/server/index.js",
+            "outFiles": [
+                "${workspaceFolder}/**/*.js"
+            ],
             "env": {
                 "OPENAI_API_KEY":"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",
                 "SUPABASE_URL":"https://munazvfqtkyrhqqfenjb.supabase.co",
@@ -15,4 +22,4 @@
             }
         }
     ]
-} 
+}

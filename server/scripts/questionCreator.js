@@ -77,9 +77,6 @@ async function main() {
 
         for (const batch of batches) {
             console.log("number of questions", questionCount);
-            if (questionCount >= 20) {
-                break;
-            }
             for (const article of batch) {
                 try {
                     const questions = await generateQuestions(article.content);
@@ -96,6 +93,16 @@ async function main() {
                     processedCount++;
                     console.log(`Processed ${processedCount}/${articles.length} articles`);
 
+                    // Append questions to the file after each article
+                    await fs.appendFile(outputPath, JSON.stringify({
+                        url: article.url,
+                        title: article.title,
+                        questions: questions
+                    }, null, 2) + ',\n');
+
+                    // Log the article number
+                    console.log(`Appended questions for article number: ${processedCount}`);
+
                     // Add delay to respect rate limits
                     await new Promise(resolve => setTimeout(resolve, 1000));
                 } catch (error) {
@@ -104,10 +111,8 @@ async function main() {
             }
         }
 
-        // Save the questions data
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const outputPath = path.join(__dirname, '..', 'data', `questions_${timestamp}.json`);
-        await fs.writeFile(outputPath, JSON.stringify(allQuestions, null, 2));
+        // Finalize the JSON array in the file
+        await fs.appendFile(outputPath, ']', { flag: 'a' });
 
         console.log('\nQuestion generation completed successfully!');
         console.log(`Total articles processed: ${processedCount}`);
