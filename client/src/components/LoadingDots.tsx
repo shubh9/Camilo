@@ -2,11 +2,11 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import styled, { keyframes, css } from 'styled-components';
 
 // Constants
-const ANIMATION_DURATION = 4;
+const ANIMATION_DURATION = 2;
 const NUM_DOTS = 3;
 const GRID_SIZE = 20;
 const UPDATE_INTERVAL = 100;
-const ANIMATION_DELAY_INCREMENT = 0.3;
+const ANIMATION_DELAY_INCREMENT = 0.15;
 
 // Keyframes for the loading animation
 const dotAnimation = keyframes`
@@ -14,7 +14,7 @@ const dotAnimation = keyframes`
     opacity: 1;
   }
   50% {
-    opacity: 0.2;
+    opacity: 0;
   }
   100% {
     opacity: 1;

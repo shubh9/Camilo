@@ -170,16 +170,7 @@ const LoadingDotsContainer = styled.div`
 
 // Main Component
 function App() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      content: "Hello! I'm Shubh, your personal AI assistant. How can I help you today?",
-      isAI: true
-    },
-    {
-      content: "I'm here to help you with any questions or tasks you need. What would you like to discuss?",
-      isAI: false
-    }
-  ]);  
+  const [messages, setMessages] = useState<Message[]>([]);  
   const [inputMessage, setInputMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
