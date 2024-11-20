@@ -59,6 +59,21 @@ app.post('/message', async (req, res) => {
             return acc;
         }, {});
 
+        // Save the message and response to Supabase
+        const latestUserMessage = userMessages[userMessages.length - 1];
+        const { error: supabaseError } = await supabase
+            .from('messagesReceived')
+            .insert([
+                { 
+                    question: latestUserMessage.content,
+                    answer: reply
+                }
+            ]);
+
+        if (supabaseError) {
+            console.error('Error saving to Supabase:', supabaseError);
+        }
+
         res.json({ 
             reply,
             linkData
