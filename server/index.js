@@ -13,7 +13,18 @@ const supabase = createClient(
     process.env.SUPABASE_KEY
 );
 
-app.use(cors());
+// Configure CORS with specific options
+const corsOptions = {
+    origin: [
+        'http://localhost:3000',
+        'https://camilo-xn71.vercel.app'
+    ],
+    methods: ['GET', 'POST'],
+    credentials: true,
+    optionsSuccessStatus: 204
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 app.get('/', (req, res) => {

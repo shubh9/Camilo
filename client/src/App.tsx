@@ -134,7 +134,7 @@ interface Message {
 }
 
 // Constants
-export const serverUrl = 'http://localhost:3001';
+export const serverUrl = 'https://camilo-server.vercel.app';
 
 const AIMessage = styled(Message)`
   margin-left: 0;
