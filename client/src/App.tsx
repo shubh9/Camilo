@@ -153,7 +153,7 @@ const UserMessage = styled(Message)`
 // Styled Components
 const Title = styled.h1`
   text-align: center;
-  color: ${black}bb;
+  color: ${black}88;
   margin-top: 20px;
 `;
 
