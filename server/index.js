@@ -52,6 +52,10 @@ app.post('/message', async (req, res) => {
     }
 });
 
-app.listen(port, () => {
-    console.log(`Server listening at http://localhost:${port}`);
-});
+if (process.env.NODE_ENV !== 'production') {
+    app.listen(port, () => {
+        console.log(`Server listening at http://localhost:${port}`);
+    });
+}
+
+module.exports = app;
