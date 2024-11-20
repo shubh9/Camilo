@@ -15,11 +15,17 @@ const supabase = createClient(
 
 // Configure CORS with specific options
 const corsOptions = {
-    origin: ['*'],
+    origin: ['http://localhost:3000'],
     methods: ['GET', 'POST'],
     credentials: true,
     optionsSuccessStatus: 204
 };
+// const corsOptions = {
+//     origin: ['*'],
+//     methods: ['GET', 'POST'],
+//     credentials: true,
+//     optionsSuccessStatus: 204
+// };
 
 app.use(cors(corsOptions));
 app.use(express.json());
@@ -37,7 +43,7 @@ app.post('/message', async (req, res) => {
     
     try {
         // Get relevant context using the new method
-        const { allSegments, topSimilarQuestions, topSimilarConversations } = await aiService.getRelevantContext(lastUserMessages.map(msg => msg.content));
+        const { allSegments, topSimilarQuestions, topSimilarConversations } = await aiService.getRelevantContext(lastUserMessages);
         
         console.log('Generating response with context...');
         const reply = await aiService.createChatCompletion(

@@ -43,6 +43,7 @@ const clonePrompt =`You role is to act like someone else named Shubh. Below you 
 
 class AiService {
     async generateEmbedding(text) {
+        console.log('Generating embedding:', text);
         try {
             const response = await openai.embeddings.create({
                 model: "text-embedding-3-large",
@@ -221,69 +222,63 @@ class AiService {
         Current question that you are answering: "${currentQuestion}"`;
     }
 
-    async getRelevantContext(message) {
-        const embedding = await this.generateEmbedding(message);
+    async getRelevantContext(messages) {
+        const embeddings = await Promise.all(messages.map(msg => this.generateEmbedding(msg.content)));
 
-        // Find similar content in parallel
-        const [similarSegments, similarQuestions, similarConversations] = await Promise.all([
-            this.findSimilarBlogSegments(embedding),
-            this.findSimilarQuestions(embedding),
-            this.findSimilarConversations(embedding)
-        ]);
-        
+        let combinedResults = [];
+
+        for (let i = 0; i < embeddings.length; i++) {
+            const embedding = embeddings[i];
+            const weight = 1 - (i * 0.2); // Calculate weight based on message position
+
+            const [similarSegments, similarQuestions, similarConversations] = await Promise.all([
+                this.findSimilarBlogSegments(embedding),
+                this.findSimilarQuestions(embedding),
+                this.findSimilarConversations(embedding)
+            ]);
+
+            // Adjust similarity scores based on weight
+            similarSegments.forEach(segment => segment.similarity *= weight);
+            similarQuestions.forEach(question => question.similarity *= weight);
+            similarConversations.forEach(conversation => conversation.similarity *= weight);
+
+            combinedResults = combinedResults.concat(
+                similarSegments.map(s => ({ ...s, type: 'segment' })),
+                similarQuestions.map(q => ({ ...q, type: 'question' })),
+                similarConversations.map(c => ({ ...c, type: 'conversation' }))
+            );
+        }
+
         // Shadow Banning specific blogs from being used!
-        const filteredSegments = similarSegments.filter(segment => segment.id <= 194 || segment.id >= 222);
+        const filteredSegments = combinedResults.filter(result => result.type !== 'segment' || (result.id <= 194 || result.id >= 222));
 
-        // Print questions and their similarity scores
-        console.log('\nSimilar Questions:');
-        similarQuestions.forEach(q => {
-            console.log(`Similarity: ${q.similarity.toFixed(4)} | Question: ${q.question}`);
-        });
-
-        // Print segments and their similarity scores 
-        console.log('\nSimilar Segments:');
-        filteredSegments.forEach(s => {
-            console.log(`Similarity: ${s.similarity.toFixed(4)} | Content: ${s.content.substring(0, 100)}...`);
-        });
-
-        console.log('\nSimilar Conversations:');
-        similarConversations?.forEach(c => {
-            console.log(`Similarity: ${c.similarity.toFixed(4)} | Messages:`);
-            c.content.conversation.slice(0, 3).forEach(msg => {
-                console.log(`  ${msg.isAI ? 'Shubh' : 'User'}: ${msg.content}`);
-            });
-        });
-
-        // Combine all results and sort by similarity
-        const combinedResults = [
-            ...filteredSegments.map(s => ({ ...s, type: 'segment' })),
-            ...similarQuestions.map(q => ({ ...q, type: 'question' })),
-            ...similarConversations.map(c => ({ ...c, type: 'conversation' }))
-        ];
-
-        combinedResults.sort((a, b) => b.similarity - a.similarity);
-
-        // Get the top 5 results
-        const topResults = combinedResults.slice(0, 5);
+        // Sort by similarity and get the top 5 results
+        filteredSegments.sort((a, b) => b.similarity - a.similarity);
+        const topResults = filteredSegments.slice(0, 5);
+        console.log('Top Results:', topResults.map(result => ({
+            content: result.type === 'question' ? result.question : result.content?.substring(0, 100) + '...',
+            type: result.type,
+            similarity: result.similarity
+        })));
 
         // Separate top results into similar questions and segments
-        const topSimilarQuestions = topResults.filter(result => result.question);
-        const topSimilarSegments = topResults.filter(result => result.url);
-        const topSimilarConversations = topResults.filter(result => !result.question && !result.url);
+        const topSimilarQuestions = topResults.filter(result => result.type === 'question');
+        const topSimilarSegments = topResults.filter(result => result.type === 'segment');
+        const topSimilarConversations = topResults.filter(result => result.type === 'conversation');
 
         // 3. Get blog content for question's attached links
         console.log('Getting blog content for question links...');
         const relevantSegmentIds = [...new Set(topSimilarQuestions.flatMap(q => q.relevantSegments || []))];
 
-        const additionalSegments = await this.getBlogContentBySegmentId(relevantSegmentIds);
+        // const additionalSegments = await this.getBlogContentBySegmentId(relevantSegmentIds);
         
         // 4. Combine all unique segments
         const allSegments = [...topSimilarSegments];
-        additionalSegments.forEach(segment => {
-            if (!allSegments.some(s => s.url === segment.url)) {
-                allSegments.push(segment);
-            }
-        });
+        // additionalSegments.forEach(segment => {
+        //     if (!allSegments.some(s => s.url === segment.url)) {
+        //         allSegments.push(segment);
+        //     }
+        // });
 
         return {
             allSegments,
