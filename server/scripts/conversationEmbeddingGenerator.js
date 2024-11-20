@@ -41,7 +41,7 @@ async function extractUserMessages(conversation) {
 
 async function main() {
     try {
-        const filePath = path.join(__dirname, '..', 'data', 'conversation');
+        const filePath = path.join(__dirname, '..', 'data', 'conversation2');
         const fileContent = await fs.readFile(filePath, 'utf8');
         const conversations = JSON.parse(fileContent);
 
