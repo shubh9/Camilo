@@ -247,7 +247,7 @@ function App() {
             messages: [...messages, userMessage]
           }),
         });
-        
+        console.log('Response:', response);
         const data = await response.json();
         
         // Process the response text to replace segment ids with numbered links
