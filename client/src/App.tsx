@@ -75,7 +75,7 @@ const MessageInput = styled.textarea`
   width: calc(100% - 20px);
   height: 24px;
   min-height: 24px;
-  padding: 8px 12px;
+  padding: 10px 12px;
   font-size: 16px;
   background-color: ${white}33;
   color: ${black};
