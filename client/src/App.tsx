@@ -1,25 +1,25 @@
-import React, { useState } from 'react';
-import styled from 'styled-components';
-import VerticalGradient from './components/VerticalGradient';
-import HorizontalGradient from './components/HorizontalGradient';
-import CircularGradient from './components/CircularGradient';
-import LoadingDots from './components/LoadingDots';
+import React, { useEffect, useState } from "react";
+import styled from "styled-components";
+import VerticalGradient from "./components/VerticalGradient";
+import HorizontalGradient from "./components/HorizontalGradient";
+import CircularGradient from "./components/CircularGradient";
+import LoadingDots from "./components/LoadingDots";
 
 // Color variables
-const mitRed = '#750014';
-const mitGrey = '#8b959e';
-const white = '#ffffff';
-const black = '#000000';
-const darkGrey = '#1a1a1a';
-const inputBorderGrey = '#333333';
-const inputBackgroundGrey = '#2a2a2a';
-const buttonBlue = '#007bff';
-const buttonHoverBlue = '#0056b3';
-const shadowColor = 'rgba(0, 0, 0, 0.1)';
+const mitRed = "#750014";
+const mitGrey = "#8b959e";
+const white = "#ffffff";
+const black = "#000000";
+const darkGrey = "#1a1a1a";
+const inputBorderGrey = "#333333";
+const inputBackgroundGrey = "#2a2a2a";
+const buttonBlue = "#007bff";
+const buttonHoverBlue = "#0056b3";
+const shadowColor = "rgba(0, 0, 0, 0.1)";
 
 // Gradient colors
-const gradientStartLightOrange = '#FFEAD6';
-const gradientEndDarkOrange = '#F8B585';
+const gradientStartLightOrange = "#FFEAD6";
+const gradientEndDarkOrange = "#F8B585";
 
 // Styled Components
 const AppContainer = styled.div`
@@ -31,7 +31,11 @@ const AppContainer = styled.div`
   display: flex;
   flex-direction: column;
   overflow-y: auto;
-  background: linear-gradient(to bottom, ${gradientStartLightOrange}, ${gradientEndDarkOrange});
+  background: linear-gradient(
+    to bottom,
+    ${gradientStartLightOrange},
+    ${gradientEndDarkOrange}
+  );
   * {
     user-select: text;
   }
@@ -82,9 +86,9 @@ const MessageInput = styled.textarea`
   resize: none;
   line-height: 1.5;
   overflow: hidden;
-  font-family: 'Inter', sans-serif;
+  font-family: "Inter", sans-serif;
   border-radius: 20px;
-    &:focus {
+  &:focus {
     outline: none;
   }
 `;
@@ -96,14 +100,14 @@ const SendButton = styled.button`
   transform: translateY(-50%);
   width: 40px;
   height: 40px;
-  background-image: url('/arrow_up.png');
+  background-image: url("/arrow_up.png");
   background-color: transparent;
   background-size: 24px;
   background-position: center;
   background-repeat: no-repeat;
   border: none;
   cursor: pointer;
-  opacity: ${props => props.disabled ? 0 : 1};
+  opacity: ${(props) => (props.disabled ? 0 : 1)};
   transition: opacity 0.5s ease-in-out;
 
   &:hover {
@@ -119,7 +123,7 @@ const MessageLink = styled.a`
   position: relative;
   z-index: 3;
   pointer-events: auto;
-  
+
   &:hover {
     color: ${black};
   }
@@ -133,8 +137,9 @@ interface Message {
 }
 
 // Constants
-export const serverUrl = 'https://camilo-server.vercel.app';
+export const serverUrl = "https://camilo-server.vercel.app";
 // export const serverUrl = 'http://localhost:3001';
+// export const serverUrl = "http://127.0.0.1:3001";
 
 const AIMessage = styled(Message)`
   margin-left: 0;
@@ -168,52 +173,82 @@ const LoadingDotsContainer = styled.div`
   line-height: 1.4;
 `;
 
+// Add this styled component with your other styled components
+const SimulateButton = styled.button`
+  padding: 10px 20px;
+  margin: 20px auto;
+  display: block;
+  background-color: ${white};
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  font-family: "Inter", sans-serif;
+  color: ${black};
+  z-index: 1;
+
+  &:hover {
+    background-color: ${white}77;
+  }
+`;
+
 // Main Component
 function App() {
-  const [messages, setMessages] = useState<Message[]>([]);  
-  const [inputMessage, setInputMessage] = useState('');
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [inputMessage, setInputMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const processResponseText = (text: string, linkData: { [key: string]: string }): { processedText: string; links: { [key: number]: string } } => {
+  const processResponseText = (
+    text: string,
+    linkData: { [key: string]: string }
+  ): { processedText: string; links: { [key: number]: string } } => {
     const links: { [key: number]: string } = {};
     let linkCounter = 1;
     const idToNumberMap: { [key: string]: number } = {};
     const urlToNumberMap: { [key: string]: number } = {};
 
     // Replace segment IDs with sequential numbers
+    console.log("linkData:", linkData);
+    console.log("text:", text);
     const processedText = text.replace(/\[(\d+)]/g, (match, segmentId) => {
-        const url = linkData[segmentId];
+      const url = linkData[segmentId];
 
-        // Check if this URL has already been assigned a number
-        if (urlToNumberMap[url]) {
-            idToNumberMap[segmentId] = urlToNumberMap[url];
-            return `[${urlToNumberMap[url]}]`;
-        }
+      // Check if this URL has already been assigned a number
+      if (urlToNumberMap[url]) {
+        idToNumberMap[segmentId] = urlToNumberMap[url];
+        return `[${urlToNumberMap[url]}]`;
+      }
 
-        // Otherwise, assign a new number and store the URL
-        idToNumberMap[segmentId] = linkCounter;
-        urlToNumberMap[url] = linkCounter;
-        links[linkCounter] = url;
-        linkCounter++;
+      // Otherwise, assign a new number and store the URL
+      idToNumberMap[segmentId] = linkCounter;
+      urlToNumberMap[url] = linkCounter;
+      links[linkCounter] = url;
+      linkCounter++;
 
-        return `[${idToNumberMap[segmentId]}]`;
+      return `[${idToNumberMap[segmentId]}]`;
     });
 
     return { processedText, links };
   };
 
-  const renderMessageWithLinks = (text: string, links?: { [key: number]: string }) => {
-    if (!links) return text;
+  const renderMessageWithLinks = (
+    text: string,
+    links?: { [key: number]: string }
+  ) => {
+    if (!links) {
+      return text;
+    }
+    console.log("Text:", text);
+    console.log("Links:", links);
 
     const parts = text.split(/(\[\d+])/);
-    
+
     return parts.map((part, index) => {
       const match = part.match(/\[(\d+)]/);
       if (match) {
         const linkNumber = parseInt(match[1]);
         const url = links[linkNumber];
         return (
-          <MessageLink 
+          <MessageLink
             key={index}
             href={url}
             target="_blank"
@@ -227,41 +262,113 @@ function App() {
     });
   };
 
+  const startSimulation = async () => {
+    console.log("Starting simulation...");
+    simulateConversation([]);
+  };
+
+  const simulateConversation = async (currentMessages: Message[]) => {
+    if (currentMessages.length > 20) {
+      console.log("Max simulation length reached");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const isUser = currentMessages.length % 2 === 0;
+
+      console.log("messages:", currentMessages);
+      console.log("isUser:", isUser);
+
+      const response = await fetch(`${serverUrl}/simulateMessage`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messages: currentMessages,
+          isUser: isUser,
+        }),
+      });
+
+      const data = await response.json();
+      console.log("data:", data);
+
+      const newMessage = {
+        content: data.reply,
+        isAI: !isUser,
+        links: undefined,
+      };
+
+      setMessages((prev) => [...prev, newMessage]);
+
+      // Continue the conversation after a short delay
+      simulateConversation([...currentMessages, newMessage]);
+    } catch (error) {
+      console.error("Error:", error);
+      setMessages((prev) => [
+        ...prev,
+        {
+          content: String("Sorry it seems like somethings wrong! " + error),
+          isAI: true,
+        },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Submitting message:', inputMessage);
     if (inputMessage.trim()) {
-      // Add user message to chat
       const userMessage = { content: inputMessage, isAI: false };
-      setMessages(prev => [...prev, userMessage]);
-      setInputMessage('');
-      setLoading(true); // Set loading to true
-      
+      setMessages((prev) => [...prev, userMessage]);
+      setInputMessage("");
+      setLoading(true);
+
       try {
         const response = await fetch(`${serverUrl}/message`, {
-          method: 'POST',
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
-          body: JSON.stringify({ 
-            messages: [...messages, userMessage]
+          body: JSON.stringify({
+            messages: [...messages, userMessage],
           }),
         });
-        console.log('Response:', response);
+        console.log("Response:", response);
         const data = await response.json();
-        
-        // Process the response text to replace segment ids with numbered links
-        const { processedText, links } = processResponseText(data.reply, data.linkData);
-        
-        setMessages(prev => [...prev, { 
-          content: processedText, 
+        console.log("data:", data);
+
+        let processedText = data.reply;
+        let links = undefined;
+        if (data.reply) {
+          const { processedText, links } = processResponseText(
+            data.reply,
+            data.linkData
+          );
+        } else {
+          throw new Error("Got empty server response");
+        }
+
+        const aiMessage = {
+          content: processedText,
           isAI: true,
-          links 
-        }]);
+          links,
+        };
+
+        setMessages((prev) => [...prev, aiMessage]);
       } catch (error) {
-        console.error('Error:', error);
+        console.error("Error:", error);
+        setMessages((prev) => [
+          ...prev,
+          {
+            content: String("Sorry it seems like somethings wrong!  " + error),
+            isAI: true,
+          },
+        ]);
       } finally {
-        setLoading(false); // Set loading to false after response
+        setLoading(false);
       }
     }
   };
@@ -269,26 +376,26 @@ function App() {
   // suggested questions:
   // How did your early experiences with coding shape your approach to problem-solving in your current projects?
 
-
   return (
     <AppContainer>
       <VerticalGradient />
       <HorizontalGradient />
       <CircularGradient />
       <Title>Chat with Shubh</Title>
+      {/* <SimulateButton onClick={startSimulation}>
+        Simulate Conversation
+      </SimulateButton> */}
       <ChatContainer>
         <MessagesContainer>
-          {messages.map((message, index) => (
+          {messages.map((message, index) =>
             message.isAI ? (
               <AIMessage key={index}>
                 {renderMessageWithLinks(message.content, message.links)}
               </AIMessage>
             ) : (
-              <UserMessage key={index}>
-                {message.content}
-              </UserMessage>
+              <UserMessage key={index}>{message.content}</UserMessage>
             )
-          ))}
+          )}
           {loading && (
             <LoadingDotsContainer>
               <LoadingDots />
@@ -302,7 +409,7 @@ function App() {
             placeholder="Message"
             rows={1}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
+              if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 if (inputMessage.trim()) {
                   handleSubmit(e);
@@ -311,17 +418,14 @@ function App() {
             }}
             onInput={(e) => {
               const target = e.target as HTMLTextAreaElement;
-              target.style.height = '24px';
+              target.style.height = "24px";
               const newHeight = target.scrollHeight;
               if (newHeight > 48) {
-                target.style.height = newHeight + 'px';
+                target.style.height = newHeight + "px";
               }
             }}
           />
-          <SendButton 
-            type="submit"
-            disabled={!inputMessage.trim()}
-          />
+          <SendButton type="submit" disabled={!inputMessage.trim()} />
         </InputContainer>
       </ChatContainer>
     </AppContainer>
