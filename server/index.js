@@ -16,15 +16,15 @@ const supabase = createClient(
 // Configure CORS with specific options
 const corsOptions = {
   origin: ["http://localhost:3000", "https://camilo-xn71.vercel.app"],
-  methods: ["GET", "POST"],
+  methods: ["GET", "POST", "OPTIONS"],
   credentials: true,
   optionsSuccessStatus: 204,
 };
 // const corsOptions = {
-//     origin: ['*'],
-//     methods: ['GET', 'POST'],
-//     credentials: true,
-//     optionsSuccessStatus: 204
+//   origin: ["*"],
+//   methods: ["GET", "POST"],
+//   credentials: true,
+//   optionsSuccessStatus: 204,
 // };
 
 app.use(cors(corsOptions));

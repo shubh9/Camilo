@@ -155,7 +155,7 @@ class AiService {
       );
 
       const response = await azure_client.chat.completions.create({
-        model: "gpt-4o",
+        model: "o1-preview",
         messages: [
           {
             role: "user",
