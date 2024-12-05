@@ -88,6 +88,7 @@ const MessageInput = styled.textarea`
   overflow: hidden;
   font-family: "Inter", sans-serif;
   border-radius: 20px;
+  border-width: 0px;
   &:focus {
     outline: none;
   }
@@ -137,9 +138,10 @@ interface Message {
 }
 
 // Constants
-export const serverUrl = "https://camilo-server.vercel.app";
-// export const serverUrl = 'http://localhost:3001';
-// export const serverUrl = "http://127.0.0.1:3001";
+export const serverUrl =
+  process.env.NODE_ENV === "production"
+    ? "https://camilo-server.vercel.app"
+    : "http://localhost:3001";
 
 const AIMessage = styled(Message)`
   margin-left: 0;
@@ -196,6 +198,7 @@ function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingDotsCount, setLoadingDotsCount] = useState(3);
 
   const processResponseText = (
     text: string,
@@ -398,7 +401,10 @@ function App() {
           )}
           {loading && (
             <LoadingDotsContainer>
-              <LoadingDots />
+              <LoadingDots
+                initialDotCount={loadingDotsCount}
+                onDotsCountChange={setLoadingDotsCount}
+              />
             </LoadingDotsContainer>
           )}
         </MessagesContainer>
