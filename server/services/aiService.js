@@ -154,8 +154,8 @@ class AiService {
         lastMessage
       );
 
-      const response = await azure_client.chat.completions.create({
-        model: "o1-preview",
+      const response = await openai.chat.completions.create({
+        model: "o1",
         messages: [
           {
             role: "user",
@@ -167,9 +167,15 @@ class AiService {
       const endTime = Date.now();
       const duration = (endTime - startTime) / 1000;
       console.log(`Response generated in ${duration} seconds`);
-      console.log("response:", response.choices[0].message.content);
 
-      return response.choices[0].message.content;
+      // Clean the response by removing text between square brackets
+      const cleanedResponse = response.choices[0].message.content.replace(
+        /\[.*?\]/g,
+        ""
+      );
+      console.log("response:", cleanedResponse);
+
+      return cleanedResponse;
     } catch (error) {
       console.error("Error creating chat completion:", error);
       throw error;
@@ -262,15 +268,18 @@ class AiService {
   }
 
   async getRelevantContext(messages) {
+    // Take only the last 4 messages
+    const lastMessages = messages.slice(-4);
+
     const embeddings = await Promise.all(
-      messages.map((msg) => this.generateEmbedding(msg.content))
+      lastMessages.map((msg) => this.generateEmbedding(msg.content))
     );
 
     let combinedResults = [];
 
     for (let i = 0; i < embeddings.length; i++) {
       const embedding = embeddings[i];
-      const weight = 1 - i * 0.2; // Calculate weight based on message position
+      const weight = i === 0 ? 1 : 0.6 - (i - 1) * 0.2;
 
       const [similarSegments, similarQuestions, similarConversations] =
         await Promise.all([
