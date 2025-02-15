@@ -1,4 +1,5 @@
 const { google } = require("googleapis");
+const { GOOGLE_CALLBACK_URL } = require("../config/urls");
 
 class OAuthService {
   static SCOPES = ["https://www.googleapis.com/auth/blogger"];
@@ -7,9 +8,7 @@ class OAuthService {
     return new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
-      process.env.NODE_ENV === "production"
-        ? "https://camilo-xn71.vercel.app/auth/google/callback"
-        : "http://localhost:3001/auth/google/callback"
+      GOOGLE_CALLBACK_URL
     );
   }
 

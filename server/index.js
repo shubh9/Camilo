@@ -8,6 +8,12 @@ const session = require("express-session");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const blogRoutes = require("./routes/blogRoutes");
 const { google } = require("googleapis");
+const {
+  DEV_CLIENT_URL,
+  PROD_CLIENT_URL,
+  CLIENT_URL,
+  GOOGLE_CALLBACK_URL,
+} = require("./config/urls");
 
 const app = express();
 const port = 3001;
@@ -20,7 +26,7 @@ const supabase = createClient(
 
 // Configure CORS with specific options
 const corsOptions = {
-  origin: ["http://localhost:3000", "https://camilo-xn71.vercel.app"],
+  origin: [DEV_CLIENT_URL, PROD_CLIENT_URL],
   methods: ["GET", "POST", "OPTIONS"],
   credentials: true,
   optionsSuccessStatus: 204,
@@ -61,19 +67,14 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL:
-        process.env.NODE_ENV === "production"
-          ? "https://camilo-xn71.vercel.app/auth/google/callback"
-          : "http://localhost:3001/auth/google/callback",
+      callbackURL: GOOGLE_CALLBACK_URL,
       scope: ["profile", "email", "https://www.googleapis.com/auth/blogger"],
     },
     function (accessToken, refreshToken, profile, cb) {
       const oauth2Client = new google.auth.OAuth2(
         process.env.GOOGLE_CLIENT_ID,
         process.env.GOOGLE_CLIENT_SECRET,
-        process.env.NODE_ENV === "production"
-          ? "https://camilo-xn71.vercel.app/auth/google/callback"
-          : "http://localhost:3001/auth/google/callback"
+        GOOGLE_CALLBACK_URL
       );
 
       oauth2Client.setCredentials({
@@ -115,18 +116,11 @@ app.get(
 app.get(
   "/auth/google/callback",
   passport.authenticate("google", {
-    failureRedirect:
-      process.env.NODE_ENV === "production"
-        ? "https://camilo-xn71.vercel.app/login"
-        : "http://localhost:3000/login",
+    failureRedirect: `${CLIENT_URL}/login`,
   }),
   function (req, res) {
     // Successful authentication, redirect home
-    res.redirect(
-      process.env.NODE_ENV === "production"
-        ? "https://camilo-xn71.vercel.app"
-        : "http://localhost:3000"
-    );
+    res.redirect(CLIENT_URL);
   }
 );
 
@@ -139,11 +133,7 @@ app.get("/auth/status", (req, res) => {
 
 app.get("/auth/logout", (req, res) => {
   req.logout(() => {
-    res.redirect(
-      process.env.NODE_ENV === "production"
-        ? "https://camilo-xn71.vercel.app"
-        : "http://localhost:3000"
-    );
+    res.redirect(CLIENT_URL);
   });
 });
 
