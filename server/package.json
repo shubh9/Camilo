@@ -6,16 +6,23 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node index.js"
-
   },
   "author": "shubh",
   "license": "ISC",
   "dependencies": {
     "@azure/openai": "^2.0.0-beta.3",
     "@supabase/supabase-js": "^2.46.1",
+    "axios": "^1.7.9",
+    "cheerio": "^1.0.0",
+    "cli-progress": "^3.12.0",
     "cors": "^2.8.5",
     "dotenv": "^16.0.0",
     "express": "^4.21.1",
-    "openai": "^4.0.0"
+    "express-session": "^1.17.3",
+    "googleapis": "^144.0.0",
+    "html-to-text": "^9.0.5",
+    "openai": "^4.0.0",
+    "passport": "^0.6.0",
+    "passport-google-oauth20": "^2.0.0"
   }
 }
