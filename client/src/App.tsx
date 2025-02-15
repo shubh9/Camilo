@@ -4,6 +4,8 @@ import VerticalGradient from "./components/VerticalGradient";
 import HorizontalGradient from "./components/HorizontalGradient";
 import CircularGradient from "./components/CircularGradient";
 import LoadingDots from "./components/LoadingDots";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { updateBlogsFromBlogger } from "./services/blogParser";
 
 // Color variables
 const mitRed = "#750014";
@@ -163,6 +165,14 @@ const Title = styled.h1`
   text-align: center;
   color: ${black}88;
   margin-top: 20px;
+  user-select: none;
+`;
+
+const TitleSpan = styled.span`
+  cursor: pointer;
+  &:hover {
+    color: ${black};
+  }
 `;
 
 // Add this new styled component after other styled components and before the App function
@@ -194,12 +204,109 @@ const SimulateButton = styled.button`
   }
 `;
 
+const LoginContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  text-align: center;
+`;
+
+const LoginButton = styled.button`
+  padding: 12px 24px;
+  background-color: ${white}88;
+  border: none;
+  border-radius: 24px;
+  font-size: 16px;
+  cursor: pointer;
+  margin-top: 20px;
+  transition: background-color 0.3s;
+
+  &:hover {
+    background-color: ${white}cc;
+  }
+`;
+
+const UserInfo = styled.div`
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 10;
+`;
+
+const LogoutButton = styled.button`
+  padding: 8px 16px;
+  background-color: ${white}88;
+  border: none;
+  border-radius: 16px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.3s;
+
+  &:hover {
+    background-color: ${white}cc;
+  }
+`;
+
+const PullBlogButton = styled.button`
+  padding: 10px 20px;
+  background-color: ${white}88;
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 14px;
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  z-index: 1;
+  transition: background-color 0.3s;
+
+  &:hover {
+    background-color: ${white}cc;
+  }
+`;
+
 // Main Component
-function App() {
+function AppContent() {
+  const { isAuthenticated, isLoading, user, login, logout, checkAuthStatus } =
+    useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingDotsCount, setLoadingDotsCount] = useState(3);
+  const [isPullingBlogs, setIsPullingBlogs] = useState(false);
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+
+  if (isLoading) {
+    return (
+      <LoginContainer>
+        <LoadingDots
+          initialDotCount={3}
+          onDotsCountChange={setLoadingDotsCount}
+        />
+      </LoginContainer>
+    );
+  }
+
+  if (showLoginPrompt && !isAuthenticated) {
+    return (
+      <LoginContainer>
+        <Title>Greetings OG</Title>
+        <LoginButton onClick={login}>Sign in with Google</LoginButton>
+      </LoginContainer>
+    );
+  }
+
+  const handleTitleClick = async (letter: string) => {
+    if (letter === "u") {
+      await checkAuthStatus();
+      setShowLoginPrompt(true);
+    }
+  };
 
   const processResponseText = (
     text: string,
@@ -377,19 +484,40 @@ function App() {
     }
   };
 
+  const handlePullBlogs = async () => {
+    try {
+      setIsPullingBlogs(true);
+      const result = await updateBlogsFromBlogger();
+      console.log("Blogs pulled successfully:", result);
+    } catch (error) {
+      console.error("Failed to pull blogs:", error);
+    } finally {
+      setIsPullingBlogs(false);
+    }
+  };
+
   // suggested questions:
   // How did your early experiences with coding shape your approach to problem-solving in your current projects?
 
   return (
     <AppContainer>
-      <VerticalGradient />
-      <HorizontalGradient />
-      <CircularGradient />
-      <Title>Chat with Shubh</Title>
-      {/* <SimulateButton onClick={startSimulation}>
-        Simulate Conversation
-      </SimulateButton> */}
+      {isAuthenticated && (
+        <>
+          <UserInfo>
+            <span>{user?.name}</span>
+            <LogoutButton onClick={logout}>Logout</LogoutButton>
+          </UserInfo>
+          <PullBlogButton onClick={handlePullBlogs} disabled={isPullingBlogs}>
+            {isPullingBlogs ? "Pulling..." : "Pull Blog"}
+          </PullBlogButton>
+        </>
+      )}
       <ChatContainer>
+        <Title>
+          Chat with Sh
+          <TitleSpan onClick={() => handleTitleClick("u")}>u</TitleSpan>
+          bh
+        </Title>
         <MessagesContainer>
           {messages.map((message, index) =>
             message.isAI ? (
@@ -436,6 +564,14 @@ function App() {
         </InputContainer>
       </ChatContainer>
     </AppContainer>
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
 
