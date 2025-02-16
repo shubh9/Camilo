@@ -26,10 +26,11 @@ const supabase = createClient(
 
 // Configure CORS with specific options
 const corsOptions = {
-  origin: [DEV_CLIENT_URL, PROD_CLIENT_URL],
-  methods: ["GET", "POST", "OPTIONS"],
+  origin: true,
+  methods: ["GET", "POST", "OPTIONS", "PUT", "PATCH", "DELETE"],
   credentials: true,
-  optionsSuccessStatus: 204,
+  optionsSuccessStatus: 200,
+  preflightContinue: false,
 };
 // const corsOptions = {
 //   origin: ["*"],
