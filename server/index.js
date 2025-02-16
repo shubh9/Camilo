@@ -26,18 +26,19 @@ const supabase = createClient(
 
 // Configure CORS with specific options
 const corsOptions = {
-  origin: true,
-  methods: ["GET", "POST", "OPTIONS", "PUT", "PATCH", "DELETE"],
+  origin: [
+    "https://www.shubh.run",
+    "https://shubh.run",
+    "http://localhost:3000",
+  ],
+  methods: "*",
+  allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,
   optionsSuccessStatus: 200,
-  preflightContinue: false,
 };
-// const corsOptions = {
-//   origin: ["*"],
-//   methods: ["GET", "POST"],
-//   credentials: true,
-//   optionsSuccessStatus: 204,
-// };
+
+// Enable pre-flight requests for all routes
+app.options("*", cors(corsOptions));
 
 app.use(cors(corsOptions));
 app.use(express.json());
