@@ -146,6 +146,7 @@ export const serverUrl =
     ? "https://shubh.run"
     : "http://localhost:3001";
 
+console.log("serverUrl:", serverUrl);
 const AIMessage = styled(Message)`
   margin-left: 0;
   background-color: transparent;
