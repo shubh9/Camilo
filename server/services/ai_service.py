@@ -238,7 +238,7 @@ class AiService:
             
             print('prompt:', prompt)
             response = openai.chat.completions.create(
-                model="o1-preview",
+                model="o1",
                 messages=[{"role": "user", "content": prompt}]
             )
             
