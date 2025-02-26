@@ -55,7 +55,7 @@ app.use(
       secure: process.env.NODE_ENV === "production",
       sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
-      domain: process.env.NODE_ENV === "production" ? ".vercel.app" : undefined,
+      domain: process.env.NODE_ENV === "production" ? ".shubh.run" : undefined,
     },
     proxy: process.env.NODE_ENV === "production", // Trust the reverse proxy in production
   })
