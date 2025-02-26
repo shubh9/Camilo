@@ -449,6 +449,10 @@ function AppContent() {
           }),
         });
         console.log("Response:", response);
+        if (!response.ok) {
+          throw new Error("Server returned " + response.status);
+        }
+
         const data = await response.json();
         console.log("data:", data);
 
