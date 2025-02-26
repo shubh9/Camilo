@@ -143,7 +143,7 @@ interface Message {
 // Constants
 export const serverUrl =
   process.env.NODE_ENV === "production"
-    ? "https://www.shubh.run"
+    ? "https://camilo-server.vercel.app"
     : "http://localhost:3001";
 
 console.log("serverUrl:", serverUrl);
