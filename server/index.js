@@ -29,6 +29,8 @@ const corsOptions = {
   origin: [
     "https://www.shubh.run",
     "https://shubh.run",
+    "http://www.shubh.run",
+    "http://shubh.run",
     "http://localhost:3000",
   ],
   methods: "*",
