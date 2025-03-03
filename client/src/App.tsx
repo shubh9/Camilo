@@ -282,6 +282,11 @@ function AppContent() {
   const [isPullingBlogs, setIsPullingBlogs] = useState(false);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
+  // Check authentication status when component mounts
+  useEffect(() => {
+    checkAuthStatus();
+  }, []);
+
   if (isLoading) {
     return (
       <LoginContainer>
@@ -404,7 +409,6 @@ function AppContent() {
       });
 
       const data = await response.json();
-      console.log("data:", data);
 
       const newMessage = {
         content: data.reply,
@@ -448,13 +452,11 @@ function AppContent() {
             messages: [...messages, userMessage],
           }),
         });
-        console.log("Response:", response);
         if (!response.ok) {
           throw new Error("Server returned " + response.status);
         }
 
         const data = await response.json();
-        console.log("data:", data);
 
         let processedText = data.reply;
         let links = undefined;

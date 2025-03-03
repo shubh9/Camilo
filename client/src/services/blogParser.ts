@@ -11,7 +11,6 @@ export const updateBlogsFromBlogger = async () => {
     });
 
     if (!response.ok) {
-      console.log("response: ", response);
       throw new Error("Failed to pull blogs");
     }
 
