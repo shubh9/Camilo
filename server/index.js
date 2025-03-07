@@ -146,7 +146,9 @@ app.get("/", (req, res) => {
 });
 
 app.post("/message", async (req, res) => {
-  const { messages } = req.body;
+  const { messages, safeMode } = req.body;
+
+  console.log("safeMode:", safeMode);
   // Filter to get only user messages
   const userMessages = messages.filter((message) => message.isAI === false);
   // Get the last 4 user messages
@@ -154,24 +156,17 @@ app.post("/message", async (req, res) => {
 
   try {
     // Get relevant context using the new method
-    const { allSegments, topSimilarQuestions, topSimilarConversations } =
+    const { blogSegments, similarQuestions, similarConversations } =
       await aiService.getRelevantContext(lastUserMessages);
 
     console.log("Generating response with context...");
     const reply = await aiService.createChatCompletion(
       messages,
-      allSegments,
-      topSimilarQuestions,
-      topSimilarConversations
+      blogSegments,
+      similarQuestions,
+      similarConversations,
+      safeMode
     );
-
-    console.log("segments:", allSegments);
-
-    // Extract unique segment IDs and URLs from the context segments
-    const linkData = allSegments.reduce((acc, segment) => {
-      acc[segment.id] = segment.url;
-      return acc;
-    }, {});
 
     // Save the message and response to Supabase
     const latestUserMessage = userMessages[userMessages.length - 1];
@@ -189,11 +184,9 @@ app.post("/message", async (req, res) => {
     }
 
     console.log("reply:", reply);
-    console.log("linkData:", linkData);
 
     res.json({
       reply,
-      linkData,
     });
   } catch (error) {
     console.error("Error processing message:", error);

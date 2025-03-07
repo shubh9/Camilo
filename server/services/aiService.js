@@ -20,6 +20,9 @@ const openai = new OpenAI({
 const MATCH_THRESHOLD = 0.02;
 const MAX_MATCH_COUNT = 5;
 
+const safeModePrompt =
+  "SAFE MODE IS ON: \n Only answer questions related to work, technology, etc. Only professional things. For personal questions stay very surface level and only say nice things, nothing deep, no drama, don't talk about romantic relationships in any capacity. Don't go into any detail on personal things !";
+
 // System prompts for different contexts
 const clonePrompt = `You role is to act like someone else named Shubh. Below you will be given context from Shubh's blog that may be relevant to the user's question. 
     Use this very heavily to answer the question. Talk exactly like he would replicating his tone and voice. 
@@ -31,13 +34,8 @@ const clonePrompt = `You role is to act like someone else named Shubh. Below you
 
     Also if you get conflicting information from the blog, ask the user a question about their specific situation first. 
 
-    Return your answer adding references in the text based on which reference the answer came from. Sometimes your answer will include text that's verbitum from the blog, other times if the user says hi or something you will moreso copying the tone rather than the text in which case you don't need to reference any references.
-    Also if you use a reference multiple times, only reference it the first time.
-    Make sure references are always in the format [N] where N is the reference number. 
-    NOT Reference 134
-    NOT [^801]
-    NOT [Reference 234 - March 2021]
-    NOT [Reference 642]
+    Sometimes your answer will include text that's verbitum from the blog, other times if the user says hi or something you will moreso copying the tone rather than the text in which case you don't need to return the text exactly.
+
 
     You only need reference for blogs don't have references for question or conversation context that you may be given.
 
@@ -45,7 +43,7 @@ const clonePrompt = `You role is to act like someone else named Shubh. Below you
 
     Example: 
     User: Where have you worked?
-    Answer: I've worked at a couple places. 4 years ago I did a coop at Abebooks in Victoria, BC as a software developer.[34] Right after that I did a coop as PM at Rogers. That was fun I got to lead a team of people although I realize now I probably should have continued to work as a developer instead of a PM [25].
+    Answer: I've worked at a couple places. 4 years ago I did a coop at Abebooks in Victoria, BC as a software developer. Right after that I did a coop as PM at Rogers. That was fun I got to lead a team of people although I realize now I probably should have continued to work as a developer instead of a PM.
 `;
 // add for guardrail     Answer questions about Entrepreneurship, startups, technology, work-life balance, career. Don't answer questions about dating, parent relationships, insecurities, or anything that's not related to the above topics.
 
@@ -114,15 +112,21 @@ class AiService {
 
   formatChatHistory(messages) {
     let lastMessage = null;
+    let messagesToFormat = [...messages];
 
     // Check if the last message is from the user and remove it if true
     if (messages.length > 0 && !messages[messages.length - 1].isAI) {
-      lastMessage = messages.pop().content;
+      lastMessage = messagesToFormat.pop().content;
     } else {
       console.log(`ERROR: Last message is from AI. ${messages}`);
     }
 
-    const formattedChatHistory = messages
+    // Only keep the last 4 messages for context
+    if (messagesToFormat.length > 4) {
+      messagesToFormat = messagesToFormat.slice(-4);
+    }
+
+    const formattedChatHistory = messagesToFormat
       .map((msg) => `${msg.isAI ? "Shubh" : "User"}: ${msg.content}`)
       .join("\n");
 
@@ -131,19 +135,23 @@ class AiService {
 
   async createChatCompletion(
     messages,
-    contextSegments,
+    blogSegments,
     similarQuestions,
-    similarConversations
+    similarConversations,
+    safeMode = true
   ) {
     try {
       const startTime = Date.now();
 
       const { formattedChatHistory, lastMessage } =
         this.formatChatHistory(messages);
-      const blogContext = this.formatContextSegments(contextSegments);
+
+      const blogContext = this.formatContextSegments(blogSegments);
       const questionsText = this.formatSimilarQuestions(similarQuestions);
       const similarConversationsText =
         this.formatSimilarConversations(similarConversations);
+
+      console.log("safeMode: ", safeMode);
 
       const prompt = this.combineIntoPrompt(
         clonePrompt,
@@ -151,11 +159,14 @@ class AiService {
         blogContext,
         questionsText,
         similarConversationsText,
-        lastMessage
+        lastMessage,
+        safeMode ? safeModePrompt : null
       );
 
+      console.log("prompt: ", prompt);
+
       const response = await openai.chat.completions.create({
-        model: "o1",
+        model: "gpt-4.5-preview",
         messages: [
           {
             role: "user",
@@ -173,7 +184,6 @@ class AiService {
         /\[.*?\]/g,
         ""
       );
-      console.log("response:", cleanedResponse);
 
       return cleanedResponse;
     } catch (error) {
@@ -193,10 +203,12 @@ class AiService {
   }
 
   formatContextSegments(segments) {
+    if (!segments || segments.length === 0)
+      throw new Error("No segments found");
     return segments
       .map((segment) => {
         const date = this.extractDateFromUrl(segment.url);
-        return `[Reference ${segment.id} - ${date}]:\n${segment.content}`;
+        return `[${date}]:\n${segment.content}`;
       })
       .join("\n\n");
   }
@@ -237,7 +249,8 @@ class AiService {
     blogContext,
     questionsText,
     similarConversationsText,
-    currentQuestion
+    currentQuestion,
+    safeModePrompt
   ) {
     return `${systemPrompt}\n\n
         &&&
@@ -263,6 +276,7 @@ class AiService {
             ? `\n&&&\nWe found a similar conversation that the real Shubh has had that might be relevant. If the content is similar follow this conversation history very closely. Espically focus on how Shubh asks the user questions to clarify the situation before making his response:\n${similarConversationsText}\n\n`
             : ""
         }
+        ${safeModePrompt ? `\n&&&\n${safeModePrompt}\n\n` : ""}
         &&&
         Current question that you are answering: "${currentQuestion}"`;
   }
@@ -275,32 +289,55 @@ class AiService {
       lastMessages.map((msg) => this.generateEmbedding(msg.content))
     );
 
-    let combinedResults = [];
+    // Calculate weights for each message (more recent messages have higher weight)
+    const weights = embeddings.map((_, i) =>
+      i === 0 ? 1 : 0.6 - (i - 1) * 0.2
+    );
 
-    for (let i = 0; i < embeddings.length; i++) {
-      const embedding = embeddings[i];
-      const weight = i === 0 ? 1 : 0.6 - (i - 1) * 0.2;
+    // Combine embeddings using weights
+    const combinedEmbedding = [];
+    if (embeddings.length > 0 && embeddings[0].length > 0) {
+      // Initialize with zeros
+      for (let i = 0; i < embeddings[0].length; i++) {
+        combinedEmbedding[i] = 0;
+      }
 
-      const [similarSegments, similarQuestions, similarConversations] =
-        await Promise.all([
-          this.findSimilarBlogSegments(embedding),
-          this.findSimilarQuestions(embedding),
-          this.findSimilarConversations(embedding),
-        ]);
+      // Weighted sum of embeddings
+      let totalWeight = 0;
+      for (let i = 0; i < embeddings.length; i++) {
+        const weight = weights[i];
+        totalWeight += weight;
 
-      // Adjust similarity scores based on weight
-      similarSegments.forEach((segment) => (segment.similarity *= weight));
-      similarQuestions.forEach((question) => (question.similarity *= weight));
-      similarConversations.forEach(
-        (conversation) => (conversation.similarity *= weight)
-      );
+        for (let j = 0; j < embeddings[i].length; j++) {
+          combinedEmbedding[j] += embeddings[i][j] * weight;
+        }
+      }
 
-      combinedResults = combinedResults.concat(
-        similarSegments.map((s) => ({ ...s, type: "segment" })),
-        similarQuestions.map((q) => ({ ...q, type: "question" })),
-        similarConversations.map((c) => ({ ...c, type: "conversation" }))
-      );
+      // Normalize the combined embedding
+      if (totalWeight > 0) {
+        for (let i = 0; i < combinedEmbedding.length; i++) {
+          combinedEmbedding[i] /= totalWeight;
+        }
+      }
     }
+
+    // Get similar content using the combined embedding
+    const [similarSegments, similarQuestions, similarConversations] =
+      await Promise.all([
+        this.findSimilarBlogSegments(combinedEmbedding),
+        this.findSimilarQuestions(combinedEmbedding),
+        this.findSimilarConversations(combinedEmbedding),
+      ]);
+
+    // Combine all results
+    const combinedResults = [
+      ...similarSegments.map((s) => ({ ...s, type: "segment" })),
+      ...similarQuestions.map((q) => ({ ...q, type: "question" })),
+      ...similarConversations.map((c) => ({ ...c, type: "conversation" })),
+    ];
+
+    // Sort by similarity score
+    combinedResults.sort((a, b) => b.similarity - a.similarity);
 
     // Shadow Banning specific blogs from being used!
     const filteredSegments = combinedResults.filter(
@@ -309,39 +346,22 @@ class AiService {
     );
 
     // Sort by similarity and get the top 5 results
-    filteredSegments.sort((a, b) => b.similarity - a.similarity);
     const topResults = filteredSegments.slice(0, 5);
     // Separate top results into similar questions and segments
     const topSimilarQuestions = topResults.filter(
       (result) => result.type === "question"
     );
-    const topSimilarSegments = topResults.filter(
+    const topSimilarBlogSegments = topResults.filter(
       (result) => result.type === "segment"
     );
     const topSimilarConversations = topResults.filter(
       (result) => result.type === "conversation"
     );
 
-    // 3. Get blog content for question's attached links
-    console.log("Getting blog content for question links...");
-    const relevantSegmentIds = [
-      ...new Set(topSimilarQuestions.flatMap((q) => q.relevantSegments || [])),
-    ];
-
-    // const additionalSegments = await this.getBlogContentBySegmentId(relevantSegmentIds);
-
-    // 4. Combine all unique segments
-    const allSegments = [...topSimilarSegments];
-    // additionalSegments.forEach(segment => {
-    //     if (!allSegments.some(s => s.url === segment.url)) {
-    //         allSegments.push(segment);
-    //     }
-    // });
-
     return {
-      allSegments,
-      topSimilarQuestions,
-      topSimilarConversations,
+      blogSegments: topSimilarBlogSegments,
+      similarQuestions: topSimilarQuestions,
+      similarConversations: topSimilarConversations,
     };
   }
 }
