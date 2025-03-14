@@ -292,7 +292,7 @@ const ToggleSlider = styled.span<{ $isOn: boolean }>`
 `;
 
 // Add a new tooltip component for the security question
-const Tooltip = styled.div<{ show: boolean }>`
+const Tooltip = styled.div<{ $show: boolean }>`
   position: absolute;
   top: 100%;
   left: 50%;
@@ -301,8 +301,8 @@ const Tooltip = styled.div<{ show: boolean }>`
   background-color: rgba(255, 255, 255, 0.95);
   border-radius: 10px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-  opacity: ${(props) => (props.show ? "1" : "0")};
-  visibility: ${(props) => (props.show ? "visible" : "hidden")};
+  opacity: ${(props) => (props.$show ? "1" : "0")};
+  visibility: ${(props) => (props.$show ? "visible" : "hidden")};
   transition: all 0.3s ease;
   z-index: 100;
   width: 250px;
@@ -364,7 +364,6 @@ function AppContent() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const [loading, setLoading] = useState(false);
-  const [loadingDotsCount, setLoadingDotsCount] = useState(3);
   const [isPullingBlogs, setIsPullingBlogs] = useState(false);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [safeMode, setSafeMode] = useState(true);
@@ -380,10 +379,7 @@ function AppContent() {
   if (isLoading) {
     return (
       <LoginContainer>
-        <LoadingDots
-          initialDotCount={3}
-          onDotsCountChange={setLoadingDotsCount}
-        />
+        <LoadingDots />
       </LoginContainer>
     );
   }
@@ -452,9 +448,6 @@ function AppContent() {
     if (!links) {
       return text;
     }
-    console.log("Text:", text);
-    console.log("Links:", links);
-
     const parts = text.split(/(\[\d+])/);
 
     return parts.map((part, index) => {
@@ -580,7 +573,7 @@ function AppContent() {
           Chat with{" "}
           <span style={{ position: "relative" }}>
             <TitleSpan onClick={() => handleTitleClick("S")}>S</TitleSpan>
-            <Tooltip show={showTooltip}>
+            <Tooltip $show={showTooltip}>
               <TooltipTitle>Turn off Safe mode</TooltipTitle>
               <div style={{ marginBottom: "10px", fontSize: "14px" }}>
                 What is Shubh's gamer tag?
@@ -626,10 +619,7 @@ function AppContent() {
           )}
           {loading && (
             <LoadingDotsContainer>
-              <LoadingDots
-                initialDotCount={loadingDotsCount}
-                onDotsCountChange={setLoadingDotsCount}
-              />
+              <LoadingDots />
             </LoadingDotsContainer>
           )}
         </MessagesContainer>
