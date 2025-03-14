@@ -366,7 +366,6 @@ function AppContent() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const [loading, setLoading] = useState(false);
-  const [loadingDotsCount, setLoadingDotsCount] = useState(3);
   const [isPullingBlogs, setIsPullingBlogs] = useState(false);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [safeMode, setSafeMode] = useState(true);
@@ -382,10 +381,7 @@ function AppContent() {
   if (isLoading) {
     return (
       <LoginContainer>
-        <LoadingDots
-          initialDotCount={3}
-          onDotsCountChange={setLoadingDotsCount}
-        />
+        <LoadingDots />
       </LoginContainer>
     );
   }
@@ -625,10 +621,7 @@ function AppContent() {
           )}
           {loading && (
             <LoadingDotsContainer>
-              <LoadingDots
-                initialDotCount={loadingDotsCount}
-                onDotsCountChange={setLoadingDotsCount}
-              />
+              <LoadingDots />
             </LoadingDotsContainer>
           )}
         </MessagesContainer>
