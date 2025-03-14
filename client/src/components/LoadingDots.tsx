@@ -32,8 +32,8 @@ const DotsContainer = styled.div`
 
 interface StyledDotProps {
   $isAnimating: boolean;
-  $x: number;
-  $y: number;
+  $left: number;
+  $top: number;
   $animationDelay: number;
 }
 
@@ -44,14 +44,16 @@ const StyledDot = styled.div<StyledDotProps>`
   margin: 0 2px;
   border-radius: 50%;
   background-color: white;
-  transform: translate(${(props) => props.$x}px, ${(props) => props.$y}px);
-  transition: transform 0.1s linear;
+  left: ${(props) => props.$left}px;
+  top: ${(props) => props.$top}px;
+  transition: left 0.1s linear, top 0.1s linear;
 
   ${({ $isAnimating, $animationDelay }) =>
     $isAnimating &&
     css`
-      position: relative;
-      transform: none;
+      position: relative; /* Back to relative for animation */
+      left: auto; /* Let the flex container handle positioning */
+      top: auto;
       animation: ${dotAnimation} ${ANIMATION_DURATION}s infinite;
       animation-delay: ${$animationDelay}s;
     `}
@@ -89,9 +91,19 @@ const generateRandomTarget = (
 };
 
 // Add this helper function to check for collision
-const checkCollision = (pos1: Position, pos2: Position): boolean => {
-  // For grid-based movement, we can just check if positions are the same
-  return pos1.x === pos2.x && pos1.y === pos2.y;
+const checkCollision = (snakeHead: Position, target: Position): boolean => {
+  console.log("Checking collision between:", snakeHead, target);
+
+  // Create hit boxes based on dot size
+  const hitBoxSize = DOT_SIZE;
+
+  // Calculate distances between centers
+  const distanceX = Math.abs(snakeHead.x - target.x);
+  const distanceY = Math.abs(snakeHead.y - target.y);
+
+  // Check if the distance is less than or equal to the combined hit box sizes
+  // We consider it a hit if the distance between centers is less than the hitBoxSize
+  return distanceX <= hitBoxSize && distanceY <= hitBoxSize;
 };
 
 // Modify the component interface
@@ -105,28 +117,30 @@ interface ScreenDimensions {
   height: number;
 }
 
-// Define TargetDot styled component first
-const TargetDot = styled.div<{ $x: number; $y: number }>`
+const TargetDot = styled.div<{ $left: number; $top: number }>`
   position: fixed;
   width: ${DOT_SIZE}px;
   height: ${DOT_SIZE}px;
   border-radius: 50%;
   background-color: white;
-  transform: translate(${(props) => props.$x}px, ${(props) => props.$y}px);
+  left: ${(props) => props.$left}px;
+  top: ${(props) => props.$top}px;
 `;
 
-// Create forwardRef wrapper for the TargetDot component
 const ForwardedTarget = React.forwardRef<
   HTMLDivElement,
-  { $x: number; $y: number } & React.HTMLAttributes<HTMLDivElement>
->((props, ref) => <TargetDot {...props} ref={ref} />);
+  { x: number; y: number } & React.HTMLAttributes<HTMLDivElement>
+>((props, ref) => {
+  const { x, y, ...rest } = props;
+  return <TargetDot $left={x} $top={y} ref={ref} {...rest} />;
+});
 
 const LoadingDots: React.FC<LoadingDotsProps> = ({
   initialDotCount,
   onDotsCountChange,
 }) => {
   const [numDots, setNumDots] = useState(initialDotCount);
-  const directionRef = useRef<Position>({ x: 1, y: 0 });
+  const directionRef = useRef<Position>({ x: -1, y: 0 });
   const [hasGameStarted, setHasGameStarted] = useState(false);
   const [targetPosition, setTargetPosition] = useState<TargetPosition | null>(
     null
@@ -135,19 +149,50 @@ const LoadingDots: React.FC<LoadingDotsProps> = ({
     width: window.innerWidth,
     height: window.innerHeight,
   });
-  // Add refs for the head dot and target dot elements
   const headDotRef = useRef<HTMLDivElement | null>(null);
   const targetDotRef = useRef<HTMLDivElement | null>(null);
+  const dotsContainerRef = useRef<HTMLDivElement | null>(null);
 
-  // Replace positionHistory with simple positions array
-  const [positions, setPositions] = useState<Position[]>(() => {
+  // Initial dummy positions - will be updated with calculated positions when game starts
+  const getDefaultPositions = useCallback(() => {
     return Array(numDots)
       .fill(null)
       .map((_, index) => ({
-        x: index * GRID_SIZE,
+        x: (numDots - 1 - index) * GRID_SIZE,
         y: 0,
       }));
-  });
+  }, [numDots]);
+
+  const [positions, setPositions] = useState<Position[]>(getDefaultPositions);
+
+  // Calculate positions of dots based on container position and flex layout
+  const calculateDotsPositions = useCallback(() => {
+    if (!dotsContainerRef.current) {
+      console.error("Container ref not set");
+      return getDefaultPositions();
+    }
+
+    // Get container rectangle
+    const containerRect = dotsContainerRef.current.getBoundingClientRect();
+    console.log("Container position:", containerRect);
+
+    // In a flex container with justify-content: center, dots will be centered horizontally
+    const singleDotWidth = DOT_SIZE + 4; // DOT_SIZE + margin
+    const totalDotsWidth = numDots * singleDotWidth;
+
+    // Calculate starting X position for first dot (center alignment logic)
+    const startX =
+      containerRect.left + (containerRect.width - totalDotsWidth) / 2;
+
+    // Create positions array with calculated values
+    // Reverse the order so head (index 0) is on the right
+    return Array(numDots)
+      .fill(null)
+      .map((_, index) => ({
+        x: startX + (numDots - 1 - index) * singleDotWidth,
+        y: containerRect.top + containerRect.height / 2 - DOT_SIZE / 2,
+      }));
+  }, [numDots, getDefaultPositions]);
 
   // Add effect to track screen dimensions
   useEffect(() => {
@@ -162,6 +207,7 @@ const LoadingDots: React.FC<LoadingDotsProps> = ({
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  // Update positions during game play
   const updatePositions = useCallback(() => {
     if (!hasGameStarted) return;
 
@@ -199,6 +245,13 @@ const LoadingDots: React.FC<LoadingDotsProps> = ({
   }, [hasGameStarted, targetPosition, numDots, screenDimensions]);
 
   useEffect(() => {
+    if (!hasGameStarted) return;
+
+    const interval = setInterval(updatePositions, UPDATE_INTERVAL);
+    return () => clearInterval(interval);
+  }, [updatePositions, hasGameStarted]);
+
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (
         !["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)
@@ -206,16 +259,25 @@ const LoadingDots: React.FC<LoadingDotsProps> = ({
         return;
       }
 
-      // Prevent default scrolling behavior for up and down arrows
+      // Prevent default scrolling behavior
       e.preventDefault();
 
       if (!hasGameStarted) {
+        // Calculate positions based on container and flex layout
+        const calculatedPositions = calculateDotsPositions();
+        console.log("Calculated dot positions:", calculatedPositions);
+
+        // Update positions state with calculated values
+        setPositions(calculatedPositions);
+
+        // Start the game
         setHasGameStarted(true);
+
+        // Set initial target
         setTargetPosition(
           generateRandomTarget(screenDimensions.width, screenDimensions.height)
         );
       }
-
       switch (e.key) {
         case "ArrowUp":
           if (directionRef.current.y !== 1) {
@@ -242,14 +304,7 @@ const LoadingDots: React.FC<LoadingDotsProps> = ({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [hasGameStarted, screenDimensions]);
-
-  useEffect(() => {
-    if (!hasGameStarted) return;
-
-    const interval = setInterval(updatePositions, UPDATE_INTERVAL);
-    return () => clearInterval(interval);
-  }, [updatePositions, hasGameStarted]);
+  }, [hasGameStarted, screenDimensions, calculateDotsPositions]);
 
   useEffect(() => {
     return () => {
@@ -299,31 +354,28 @@ const LoadingDots: React.FC<LoadingDotsProps> = ({
         rect.bottom > screenDimensions.height ||
         rect.top < 0
       ) {
-        console.log("Target outside visible area resetting");
-        // Generate a new position that's safely within bounds
-        setTargetPosition(
-          generateRandomTarget(screenDimensions.width, screenDimensions.height)
-        );
+        throw new Error("Target outside visible area resetting");
       }
     }
   }, [targetPosition, screenDimensions]);
 
   return (
-    <DotsContainer>
+    <DotsContainer ref={dotsContainerRef}>
       {targetPosition && (
         <ForwardedTarget
           ref={targetDotRef}
-          $x={targetPosition.x}
-          $y={targetPosition.y}
+          x={targetPosition.x}
+          y={targetPosition.y}
         />
       )}
+
       {positions.map((pos, index) => (
         <ForwardedDot
           key={index}
           ref={index === 0 ? headDotRef : null}
           $isAnimating={!hasGameStarted}
-          $x={pos.x}
-          $y={pos.y}
+          $left={pos.x}
+          $top={pos.y}
           $animationDelay={index * ANIMATION_DELAY_INCREMENT}
         />
       ))}
