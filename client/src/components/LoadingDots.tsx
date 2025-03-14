@@ -3,11 +3,9 @@ import styled, { keyframes, css } from "styled-components";
 
 // Constants
 const ANIMATION_DURATION = 2;
-const NUM_DOTS = 3;
 const GRID_SIZE = 20;
 const UPDATE_INTERVAL = 100;
 const ANIMATION_DELAY_INCREMENT = 0.15;
-const MAX_DISTANCE = 200; // Maximum distance from center for target
 const DOT_SIZE = 12; // Slightly larger than regular dots
 
 // Keyframes for the loading animation
@@ -40,19 +38,13 @@ interface StyledDotProps {
 }
 
 const StyledDot = styled.div<StyledDotProps>`
-  position: absolute;
+  position: fixed;
   width: ${DOT_SIZE}px;
   height: ${DOT_SIZE}px;
   margin: 0 2px;
   border-radius: 50%;
   background-color: white;
-  transform: translate(
-    calc(
-      ${(props) => props.$x}px +
-        ${(props) => (props.$isAnimating ? "0px" : "0px")}
-    ),
-    ${(props) => props.$y}px
-  );
+  transform: translate(${(props) => props.$x}px, ${(props) => props.$y}px);
   transition: transform 0.1s linear;
 
   ${({ $isAnimating, $animationDelay }) =>
@@ -68,11 +60,6 @@ const StyledDot = styled.div<StyledDotProps>`
 interface Position {
   x: number;
   y: number;
-}
-
-interface PositionHistory {
-  positions: Position[];
-  direction: Position;
 }
 
 interface TargetPosition {
@@ -99,11 +86,8 @@ const generateRandomTarget = (): TargetPosition => {
 
 // Add this helper function to check for collision
 const checkCollision = (pos1: Position, pos2: Position): boolean => {
-  // Using the dot size to determine collision
-  const distance = Math.sqrt(
-    Math.pow(pos1.x - pos2.x, 2) + Math.pow(pos1.y - pos2.y, 2)
-  );
-  return distance < DOT_SIZE;
+  // For grid-based movement, we can just check if positions are the same
+  return pos1.x === pos2.x && pos1.y === pos2.y;
 };
 
 // Modify the component interface
@@ -112,68 +96,82 @@ interface LoadingDotsProps {
   onDotsCountChange: (count: number) => void;
 }
 
+interface ScreenDimensions {
+  width: number;
+  height: number;
+}
+
 const LoadingDots: React.FC<LoadingDotsProps> = ({
   initialDotCount,
   onDotsCountChange,
 }) => {
   const [numDots, setNumDots] = useState(initialDotCount);
   const directionRef = useRef<Position>({ x: 1, y: 0 });
-  const [isAnimating, setIsAnimating] = useState(true);
-  const [isStarted, setIsStarted] = useState(false);
+  const [hasGameStarted, setHasGameStarted] = useState(false);
   const [targetPosition, setTargetPosition] = useState<TargetPosition | null>(
     null
   );
+  const [screenDimensions, setScreenDimensions] = useState<ScreenDimensions>({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  });
 
-  const [positionHistory, setPositionHistory] = useState<PositionHistory[]>(
-    () => {
-      const initialPositions = Array(numDots)
-        .fill(null)
-        .map((_, index) => ({
-          x: index * GRID_SIZE,
-          y: 0,
-        }));
-      return [{ positions: initialPositions, direction: { x: 1, y: 0 } }];
-    }
-  );
+  // Replace positionHistory with simple positions array
+  const [positions, setPositions] = useState<Position[]>(() => {
+    return Array(numDots)
+      .fill(null)
+      .map((_, index) => ({
+        x: index * GRID_SIZE,
+        y: 0,
+      }));
+  });
+
+  // Add effect to track screen dimensions
+  useEffect(() => {
+    const handleResize = () => {
+      setScreenDimensions({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   const updatePositions = useCallback(() => {
-    if (!isStarted) return;
+    if (!hasGameStarted) return;
 
-    setPositionHistory((prev) => {
-      const lastHistory = prev[prev.length - 1];
-      const newPositions = [...lastHistory.positions];
+    setPositions((prevPositions) => {
+      // Create copy for modification
+      const newPositions = [...prevPositions];
+
+      // Save the last position in case we need to grow
+      const lastPosition = { ...newPositions[newPositions.length - 1] };
 
       // Calculate new head position
       const newHead = {
-        x: lastHistory.positions[0].x + directionRef.current.x * GRID_SIZE,
-        y: lastHistory.positions[0].y + directionRef.current.y * GRID_SIZE,
+        x: newPositions[0].x + directionRef.current.x * GRID_SIZE,
+        y: newPositions[0].y + directionRef.current.y * GRID_SIZE,
       };
 
-      // Check collision with target
-      if (targetPosition && checkCollision(newHead, targetPosition)) {
-        setTargetPosition(generateRandomTarget());
-        updateNumDots(numDots + 1);
-
-        // Add a new dot at the end of the snake
-        const lastDot = lastHistory.positions[lastHistory.positions.length - 1];
-        newPositions.push({ ...lastDot });
+      // Move body segments - each segment takes the position of the segment in front of it
+      for (let i = newPositions.length - 1; i > 0; i--) {
+        newPositions[i] = { ...newPositions[i - 1] };
       }
 
+      // Set new head position
       newPositions[0] = newHead;
 
-      for (let i = 1; i < newPositions.length; i++) {
-        const historyIndex = Math.max(0, prev.length - i);
-        const historicalPosition = prev[historyIndex].positions[0];
-        newPositions[i] = { ...historicalPosition };
+      if (targetPosition && checkCollision(newHead, targetPosition)) {
+        setTargetPosition(generateRandomTarget());
+        setNumDots(numDots + 1);
+        newPositions.push(lastPosition);
       }
 
-      const newHistory = [
-        ...prev.slice(-(numDots + 1)),
-        { positions: newPositions, direction: directionRef.current },
-      ];
-      return newHistory;
+      return newPositions;
     });
-  }, [isStarted, targetPosition, numDots]);
+  }, [hasGameStarted, targetPosition, numDots]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -186,9 +184,8 @@ const LoadingDots: React.FC<LoadingDotsProps> = ({
       // Prevent default scrolling behavior for up and down arrows
       e.preventDefault();
 
-      setIsAnimating(false);
-      if (!isStarted) {
-        setIsStarted(true);
+      if (!hasGameStarted) {
+        setHasGameStarted(true);
         setTargetPosition(generateRandomTarget());
       }
 
@@ -218,56 +215,51 @@ const LoadingDots: React.FC<LoadingDotsProps> = ({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isStarted]);
+  }, [hasGameStarted]);
 
   useEffect(() => {
-    if (!isStarted) return;
+    if (!hasGameStarted) return;
 
     const interval = setInterval(updatePositions, UPDATE_INTERVAL);
     return () => clearInterval(interval);
-  }, [updatePositions, isStarted]);
+  }, [updatePositions, hasGameStarted]);
 
   useEffect(() => {
-    if (!isStarted) return;
+    return () => {
+      // This will run when the component unmounts
+      onDotsCountChange(numDots);
+    };
+  }, [onDotsCountChange, numDots]);
 
-    const logInterval = setInterval(() => {
-      const headPosition =
-        positionHistory[positionHistory.length - 1].positions[0];
-      console.log("Snake Head Position:", {
-        x: headPosition.x,
-        y: headPosition.y,
-      });
-      console.log("Target Position:", targetPosition);
-    }, 3000);
-
-    return () => clearInterval(logInterval);
-  }, [isStarted, positionHistory, targetPosition]);
-
-  const currentPositions =
-    positionHistory[positionHistory.length - 1].positions;
-
-  const headPosition = positionHistory[positionHistory.length - 1].positions[0];
-  console.log("targetPosition", targetPosition);
+  console.log("Screen Dimensions width:", screenDimensions.width);
+  console.log("Screen Dimensions height:", screenDimensions.height);
+  const headX = positions[0].x;
+  const headY = positions[0].y;
+  if (
+    headX < 0 ||
+    headX > screenDimensions.width ||
+    headY < 0 ||
+    headY > screenDimensions.height
+  ) {
+    console.log("Snake off screen");
+  }
+  // Update to use the new positions state directly
+  const headPosition = positions[0];
   console.log("Snake Head Position:", {
     x: headPosition.x,
     y: headPosition.y,
   });
-
-  // Modify the setNumDots call to also notify parent
-  const updateNumDots = (newCount: number) => {
-    setNumDots(newCount);
-    onDotsCountChange(newCount);
-  };
+  console.log("Target Position:", targetPosition);
 
   return (
     <DotsContainer>
       {targetPosition && (
         <TargetDot $x={targetPosition.x} $y={targetPosition.y} />
       )}
-      {currentPositions.map((pos, index) => (
+      {positions.map((pos, index) => (
         <StyledDot
           key={index}
-          $isAnimating={isAnimating}
+          $isAnimating={!hasGameStarted}
           $x={pos.x}
           $y={pos.y}
           $animationDelay={index * ANIMATION_DELAY_INCREMENT}
@@ -278,7 +270,7 @@ const LoadingDots: React.FC<LoadingDotsProps> = ({
 };
 
 const TargetDot = styled.div<{ $x: number; $y: number }>`
-  position: absolute;
+  position: fixed;
   width: ${DOT_SIZE}px;
   height: ${DOT_SIZE}px;
   border-radius: 50%;

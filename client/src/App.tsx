@@ -58,6 +58,7 @@ const ChatContainer = styled.div`
 const MessagesContainer = styled.div`
   flex: 1;
   overflow-y: auto;
+  border: 1px solid black;
 `;
 
 const Message = styled.div`
@@ -185,6 +186,7 @@ const LoadingDotsContainer = styled.div`
   max-width: 70%;
   word-wrap: break-word;
   line-height: 1.4;
+  border: 1px solid black;
 `;
 
 const LoginContainer = styled.div`
@@ -452,9 +454,6 @@ function AppContent() {
     if (!links) {
       return text;
     }
-    console.log("Text:", text);
-    console.log("Links:", links);
-
     const parts = text.split(/(\[\d+])/);
 
     return parts.map((part, index) => {
