@@ -1,8 +1,5 @@
 import React, { useEffect, useState } from "react";
 import styled from "styled-components";
-import VerticalGradient from "./components/VerticalGradient";
-import HorizontalGradient from "./components/HorizontalGradient";
-import CircularGradient from "./components/CircularGradient";
 import LoadingDots from "./components/LoadingDots";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { updateBlogsFromBlogger } from "./services/blogParser";
@@ -60,7 +57,7 @@ const MessagesContainer = styled.div`
   overflow-y: auto;
 `;
 
-const Message = styled.div`
+const MessageStyle = styled.div`
   padding: 10px 15px;
   border-radius: 8px;
   margin-bottom: 10px;
@@ -147,14 +144,14 @@ export const serverUrl =
     : "http://localhost:3001";
 
 console.log("serverUrl:", serverUrl);
-const AIMessage = styled(Message)`
+const AIMessage = styled(MessageStyle)`
   margin-left: 0;
   background-color: transparent;
   color: ${black};
   z-index: 1;
 `;
 
-const UserMessage = styled(Message)`
+const UserMessage = styled(MessageStyle)`
   margin-left: auto;
   background-color: ${white}55;
   color: ${black};
@@ -253,44 +250,6 @@ const PullBlogButton = styled.button`
   }
 `;
 
-// Add these new styled components after other styled components
-const ToggleSwitch = styled.label`
-  position: relative;
-  display: inline-block;
-  width: 40px;
-  height: 20px;
-  cursor: pointer;
-`;
-
-const ToggleInput = styled.input`
-  opacity: 0;
-  width: 0;
-  height: 0;
-`;
-
-const ToggleSlider = styled.span<{ $isOn: boolean }>`
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: ${(props) => (props.$isOn ? buttonBlue : inputBorderGrey)};
-  border-radius: 10px;
-  transition: 0.4s;
-
-  &:before {
-    content: "";
-    position: absolute;
-    height: 16px;
-    width: 16px;
-    left: ${(props) => (props.$isOn ? "22px" : "2px")};
-    bottom: 2px;
-    background-color: ${white};
-    border-radius: 8px;
-    transition: 0.4s;
-  }
-`;
-
 // Add a new tooltip component for the security question
 const Tooltip = styled.div<{ $show: boolean }>`
   position: absolute;
@@ -374,7 +333,7 @@ function AppContent() {
   // Check authentication status when component mounts
   useEffect(() => {
     checkAuthStatus();
-  }, []);
+  }, [checkAuthStatus]);
 
   if (isLoading) {
     return (

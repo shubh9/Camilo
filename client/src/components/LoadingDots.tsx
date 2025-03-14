@@ -255,7 +255,7 @@ const LoadingDots: React.FC<LoadingDotsProps> = ({
         x: startX + (numDots - 1 - index) * singleDotWidth,
         y: containerRect.top + containerRect.height / 2 - DOT_SIZE / 2,
       }));
-  }, [numDots, getDefaultPositions]);
+  }, [numDots]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -419,18 +419,6 @@ const LoadingDots: React.FC<LoadingDotsProps> = ({
       }
     };
   }, [numDots, onDotsCountChange]);
-
-  // Calculate actual screen coordinates for the head dot
-  const getActualScreenCoordinates = (ref: React.RefObject<HTMLDivElement>) => {
-    if (ref.current) {
-      const rect = ref.current.getBoundingClientRect();
-      return {
-        screenX: rect.left + rect.width / 2, // Center X of the dot
-        screenY: rect.top + rect.height / 2, // Center Y of the dot
-      };
-    }
-    return { screenX: null, screenY: null };
-  };
 
   // Validate target position is within screen bounds
   useEffect(() => {
