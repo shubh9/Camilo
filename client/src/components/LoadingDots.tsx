@@ -84,7 +84,6 @@ const generateRandomTarget = (
   screenWidth: number,
   screenHeight: number
 ): TargetPosition => {
-  // Use screen dimensions for bounds instead of constants
   const x = Math.floor(Math.random() * screenWidth);
   const y = Math.floor(Math.random() * screenHeight);
 
@@ -239,7 +238,6 @@ const LoadingDots: React.FC<LoadingDotsProps> = ({
 
     // Get container rectangle
     const containerRect = dotsContainerRef.current.getBoundingClientRect();
-    console.log("Container position:", containerRect);
 
     // In a flex container with justify-content: center, dots will be centered horizontally
     const singleDotWidth = DOT_SIZE + 4; // DOT_SIZE + margin
@@ -259,7 +257,6 @@ const LoadingDots: React.FC<LoadingDotsProps> = ({
       }));
   }, [numDots, getDefaultPositions]);
 
-  // Add effect to track screen dimensions
   useEffect(() => {
     const handleResize = () => {
       setScreenDimensions({
@@ -373,7 +370,6 @@ const LoadingDots: React.FC<LoadingDotsProps> = ({
       if (!hasGameStarted) {
         // Calculate positions based on container and flex layout
         const calculatedPositions = calculateDotsPositions();
-        console.log("Calculated dot positions:", calculatedPositions);
 
         // Update positions state with calculated values
         setPositions(calculatedPositions);
@@ -435,9 +431,6 @@ const LoadingDots: React.FC<LoadingDotsProps> = ({
     }
     return { screenX: null, screenY: null };
   };
-
-  const headActualCoords = getActualScreenCoordinates(headDotRef);
-  const targetActualCoords = getActualScreenCoordinates(targetDotRef);
 
   // Validate target position is within screen bounds
   useEffect(() => {

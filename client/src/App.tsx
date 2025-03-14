@@ -58,7 +58,6 @@ const ChatContainer = styled.div`
 const MessagesContainer = styled.div`
   flex: 1;
   overflow-y: auto;
-  border: 1px solid black;
 `;
 
 const Message = styled.div`
@@ -186,7 +185,6 @@ const LoadingDotsContainer = styled.div`
   max-width: 70%;
   word-wrap: break-word;
   line-height: 1.4;
-  border: 1px solid black;
 `;
 
 const LoginContainer = styled.div`
@@ -294,7 +292,7 @@ const ToggleSlider = styled.span<{ $isOn: boolean }>`
 `;
 
 // Add a new tooltip component for the security question
-const Tooltip = styled.div<{ show: boolean }>`
+const Tooltip = styled.div<{ $show: boolean }>`
   position: absolute;
   top: 100%;
   left: 50%;
@@ -303,8 +301,8 @@ const Tooltip = styled.div<{ show: boolean }>`
   background-color: rgba(255, 255, 255, 0.95);
   border-radius: 10px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-  opacity: ${(props) => (props.show ? "1" : "0")};
-  visibility: ${(props) => (props.show ? "visible" : "hidden")};
+  opacity: ${(props) => (props.$show ? "1" : "0")};
+  visibility: ${(props) => (props.$show ? "visible" : "hidden")};
   transition: all 0.3s ease;
   z-index: 100;
   width: 250px;
@@ -575,7 +573,7 @@ function AppContent() {
           Chat with{" "}
           <span style={{ position: "relative" }}>
             <TitleSpan onClick={() => handleTitleClick("S")}>S</TitleSpan>
-            <Tooltip show={showTooltip}>
+            <Tooltip $show={showTooltip}>
               <TooltipTitle>Turn off Safe mode</TooltipTitle>
               <div style={{ marginBottom: "10px", fontSize: "14px" }}>
                 What is Shubh's gamer tag?
