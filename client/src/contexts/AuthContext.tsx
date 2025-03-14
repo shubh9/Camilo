@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from "react";
+import React, { createContext, useContext, useState, useCallback } from "react";
 import { serverUrl } from "../App";
 
 interface User {
@@ -23,7 +23,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const checkAuthStatus = async () => {
+  const checkAuthStatus = useCallback(async () => {
     setIsLoading(true);
     try {
       const response = await fetch(`${serverUrl}/auth/status`, {
@@ -38,7 +38,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   const login = () => {
     window.location.href = `${serverUrl}/auth/google`;

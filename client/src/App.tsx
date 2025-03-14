@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
 import styled from "styled-components";
-import LoadingDots from "./components/LoadingDots";
+// import LoadingDots from "./components/LoadingDots";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { updateBlogsFromBlogger } from "./services/blogParser";
+import LoadingSnakes from "loading-snakes";
 
 // Color variables
 const white = "#ffffff";
@@ -338,7 +339,7 @@ function AppContent() {
   if (isLoading) {
     return (
       <LoginContainer>
-        <LoadingDots />
+        <LoadingSnakes />
       </LoginContainer>
     );
   }
@@ -578,7 +579,7 @@ function AppContent() {
           )}
           {loading && (
             <LoadingDotsContainer>
-              <LoadingDots />
+              <LoadingSnakes />
             </LoadingDotsContainer>
           )}
         </MessagesContainer>

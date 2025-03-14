@@ -147,15 +147,8 @@ app.get("/", (req, res) => {
 
 app.post("/message", async (req, res) => {
   const { messages, safeMode } = req.body;
-  // Add a delay of 10 seconds before proceeding
-  await new Promise((resolve) => setTimeout(resolve, 10000));
-
-  // Return hello
-  res.json({ reply: "hello" });
-  return;
 
   console.log("safeMode:", safeMode);
-  l;
   // Filter to get only user messages
   const userMessages = messages.filter((message) => message.isAI === false);
   // Get the last 4 user messages
