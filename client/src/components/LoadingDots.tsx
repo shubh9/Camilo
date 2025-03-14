@@ -57,6 +57,12 @@ const StyledDot = styled.div<StyledDotProps>`
     `}
 `;
 
+// Create a forwardRef wrapper for the StyledDot component
+const ForwardedDot = React.forwardRef<
+  HTMLDivElement,
+  StyledDotProps & React.HTMLAttributes<HTMLDivElement>
+>((props, ref) => <StyledDot {...props} ref={ref} />);
+
 interface Position {
   x: number;
   y: number;
@@ -67,15 +73,13 @@ interface TargetPosition {
   y: number;
 }
 
-// Define min and max values for x and y
-const MIN_X = -60;
-const MAX_X = 700;
-const MIN_Y = -60;
-const MAX_Y = 600;
-
-const generateRandomTarget = (): TargetPosition => {
-  const x = Math.floor(Math.random() * (MAX_X - MIN_X + 1)) + MIN_X;
-  const y = Math.floor(Math.random() * (MAX_Y - MIN_Y + 1)) + MIN_Y;
+const generateRandomTarget = (
+  screenWidth: number,
+  screenHeight: number
+): TargetPosition => {
+  // Use screen dimensions for bounds instead of constants
+  const x = Math.floor(Math.random() * screenWidth);
+  const y = Math.floor(Math.random() * screenHeight);
 
   // Round to the nearest GRID_SIZE
   const roundedX = Math.round(x / GRID_SIZE) * GRID_SIZE;
@@ -101,6 +105,22 @@ interface ScreenDimensions {
   height: number;
 }
 
+// Define TargetDot styled component first
+const TargetDot = styled.div<{ $x: number; $y: number }>`
+  position: fixed;
+  width: ${DOT_SIZE}px;
+  height: ${DOT_SIZE}px;
+  border-radius: 50%;
+  background-color: white;
+  transform: translate(${(props) => props.$x}px, ${(props) => props.$y}px);
+`;
+
+// Create forwardRef wrapper for the TargetDot component
+const ForwardedTarget = React.forwardRef<
+  HTMLDivElement,
+  { $x: number; $y: number } & React.HTMLAttributes<HTMLDivElement>
+>((props, ref) => <TargetDot {...props} ref={ref} />);
+
 const LoadingDots: React.FC<LoadingDotsProps> = ({
   initialDotCount,
   onDotsCountChange,
@@ -115,6 +135,9 @@ const LoadingDots: React.FC<LoadingDotsProps> = ({
     width: window.innerWidth,
     height: window.innerHeight,
   });
+  // Add refs for the head dot and target dot elements
+  const headDotRef = useRef<HTMLDivElement | null>(null);
+  const targetDotRef = useRef<HTMLDivElement | null>(null);
 
   // Replace positionHistory with simple positions array
   const [positions, setPositions] = useState<Position[]>(() => {
@@ -164,14 +187,16 @@ const LoadingDots: React.FC<LoadingDotsProps> = ({
       newPositions[0] = newHead;
 
       if (targetPosition && checkCollision(newHead, targetPosition)) {
-        setTargetPosition(generateRandomTarget());
+        setTargetPosition(
+          generateRandomTarget(screenDimensions.width, screenDimensions.height)
+        );
         setNumDots(numDots + 1);
         newPositions.push(lastPosition);
       }
 
       return newPositions;
     });
-  }, [hasGameStarted, targetPosition, numDots]);
+  }, [hasGameStarted, targetPosition, numDots, screenDimensions]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -186,7 +211,9 @@ const LoadingDots: React.FC<LoadingDotsProps> = ({
 
       if (!hasGameStarted) {
         setHasGameStarted(true);
-        setTargetPosition(generateRandomTarget());
+        setTargetPosition(
+          generateRandomTarget(screenDimensions.width, screenDimensions.height)
+        );
       }
 
       switch (e.key) {
@@ -215,7 +242,7 @@ const LoadingDots: React.FC<LoadingDotsProps> = ({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [hasGameStarted]);
+  }, [hasGameStarted, screenDimensions]);
 
   useEffect(() => {
     if (!hasGameStarted) return;
@@ -231,34 +258,69 @@ const LoadingDots: React.FC<LoadingDotsProps> = ({
     };
   }, [onDotsCountChange, numDots]);
 
-  console.log("Screen Dimensions width:", screenDimensions.width);
-  console.log("Screen Dimensions height:", screenDimensions.height);
-  const headX = positions[0].x;
-  const headY = positions[0].y;
-  if (
-    headX < 0 ||
-    headX > screenDimensions.width ||
-    headY < 0 ||
-    headY > screenDimensions.height
-  ) {
-    console.log("Snake off screen");
-  }
-  // Update to use the new positions state directly
-  const headPosition = positions[0];
-  console.log("Snake Head Position:", {
-    x: headPosition.x,
-    y: headPosition.y,
-  });
-  console.log("Target Position:", targetPosition);
+  // Calculate actual screen coordinates for the head dot
+  const getActualScreenCoordinates = (ref: React.RefObject<HTMLDivElement>) => {
+    if (ref.current) {
+      const rect = ref.current.getBoundingClientRect();
+      return {
+        screenX: rect.left + rect.width / 2, // Center X of the dot
+        screenY: rect.top + rect.height / 2, // Center Y of the dot
+      };
+    }
+    return { screenX: null, screenY: null };
+  };
+
+  const headActualCoords = getActualScreenCoordinates(headDotRef);
+  const targetActualCoords = getActualScreenCoordinates(targetDotRef);
+
+  // console.log("Snake Head Position (Relative):", {
+  //   x: headPosition.x,
+  //   y: headPosition.y,
+  // });
+  console.log(
+    "Snake Head Position (Actual Screen Coordinates):",
+    headActualCoords
+  );
+  // console.log("Target Position (Relative):", targetPosition);
+  // console.log(
+  //   "Target Position (Actual Screen Coordinates):",
+  //   targetActualCoords
+  // );
+
+  // Validate target position is within screen bounds
+  useEffect(() => {
+    if (targetPosition && targetDotRef.current) {
+      const rect = targetDotRef.current.getBoundingClientRect();
+
+      // Check if target is outside visible area
+      if (
+        rect.right > screenDimensions.width ||
+        rect.left < 0 ||
+        rect.bottom > screenDimensions.height ||
+        rect.top < 0
+      ) {
+        console.log("Target outside visible area resetting");
+        // Generate a new position that's safely within bounds
+        setTargetPosition(
+          generateRandomTarget(screenDimensions.width, screenDimensions.height)
+        );
+      }
+    }
+  }, [targetPosition, screenDimensions]);
 
   return (
     <DotsContainer>
       {targetPosition && (
-        <TargetDot $x={targetPosition.x} $y={targetPosition.y} />
+        <ForwardedTarget
+          ref={targetDotRef}
+          $x={targetPosition.x}
+          $y={targetPosition.y}
+        />
       )}
       {positions.map((pos, index) => (
-        <StyledDot
+        <ForwardedDot
           key={index}
+          ref={index === 0 ? headDotRef : null}
           $isAnimating={!hasGameStarted}
           $x={pos.x}
           $y={pos.y}
@@ -268,14 +330,5 @@ const LoadingDots: React.FC<LoadingDotsProps> = ({
     </DotsContainer>
   );
 };
-
-const TargetDot = styled.div<{ $x: number; $y: number }>`
-  position: fixed;
-  width: ${DOT_SIZE}px;
-  height: ${DOT_SIZE}px;
-  border-radius: 50%;
-  background-color: white;
-  transform: translate(${(props) => props.$x}px, ${(props) => props.$y}px);
-`;
 
 export default LoadingDots;
