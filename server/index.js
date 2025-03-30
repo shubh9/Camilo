@@ -30,6 +30,8 @@ const messageEventEmitter = new EventEmitter();
 // Set higher limit for event listeners
 messageEventEmitter.setMaxListeners(100);
 
+// app.use(cors());
+
 // Configure CORS with specific options
 const corsOptions = {
   origin: [
@@ -38,13 +40,11 @@ const corsOptions = {
     "http://www.shubh.run",
     "http://shubh.run",
     "http://localhost:3000",
-    DEV_CLIENT_URL, // Add DEV_CLIENT_URL
-    PROD_CLIENT_URL, // Add PROD_CLIENT_URL
   ],
-  methods: "GET,HEAD,PUT,PATCH,POST,DELETE", // Allow standard methods
+  methods: "*",
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,
-  optionsSuccessStatus: 200, // some legacy browsers (IE11, various SmartTVs) choke on 204
+  optionsSuccessStatus: 200,
 };
 
 // Enable pre-flight requests for all routes
@@ -84,6 +84,14 @@ passport.use(
       scope: ["profile", "email", "https://www.googleapis.com/auth/blogger"],
     },
     function (accessToken, refreshToken, profile, cb) {
+      console.log("Access Token received:", !!accessToken);
+      console.log("Refresh Token received:", !!refreshToken);
+      if (refreshToken) {
+        console.log("Actual Refresh Token:", refreshToken);
+      } else {
+        console.log("No refresh token was issued!");
+      }
+
       const oauth2Client = new google.auth.OAuth2(
         process.env.GOOGLE_CLIENT_ID,
         process.env.GOOGLE_CLIENT_SECRET,
@@ -119,6 +127,10 @@ passport.deserializeUser((user, done) => {
 // Auth Routes
 app.get(
   "/auth/google",
+  (req, res, next) => {
+    console.log("Starting Google auth process...");
+    next();
+  },
   passport.authenticate("google", {
     scope: ["profile", "email", "https://www.googleapis.com/auth/blogger"],
     accessType: "offline",
@@ -128,10 +140,15 @@ app.get(
 
 app.get(
   "/auth/google/callback",
+  (req, res, next) => {
+    console.log("Received callback from Google");
+    next();
+  },
   passport.authenticate("google", {
     failureRedirect: `${CLIENT_URL}/login`,
   }),
   function (req, res) {
+    console.log("Authentication successful, user:", req.user?.email);
     // Successful authentication, redirect home
     res.redirect(CLIENT_URL);
   }

@@ -7,7 +7,7 @@ const OAuthService = require("../services/oauthService");
 const {
   processAndSaveArticles,
 } = require("../scripts/splitArticlesToParagraphs");
-
+const { GOOGLE_CALLBACK_URL } = require("../config/urls");
 // Initialize Supabase
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -40,15 +40,20 @@ const isAuthenticated = (req, res, next) => {
 };
 
 // Update blogs route
-router.get("/update", isAuthenticated, async (req, res) => {
+router.get("/update", async (req, res) => {
   try {
-    // Get configured OAuth2 client from service
-    const oauth2Client = OAuthService.getConfiguredClient(
-      req.user.accessToken,
-      req.user.refreshToken
+    // Configure OAuth2 client directly using stored refresh token
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      GOOGLE_CALLBACK_URL // Redirect URL used during initial setup
     );
 
-    // Use the OAuth2 client
+    oauth2Client.setCredentials({
+      refresh_token: process.env.GOOGLE_REFRESH_TOKEN, // Load your stored refresh token
+    });
+
+    // Use the OAuth2 client - it will handle refreshing the access token automatically
     const blogger = google.blogger({
       version: "v3",
       auth: oauth2Client,
@@ -122,6 +127,20 @@ router.get("/update", isAuthenticated, async (req, res) => {
       newBlogsProcessed: newBlogs.length,
     });
   } catch (error) {
+    // Handle potential token errors (e.g., revoked refresh token)
+    if (
+      error.response &&
+      error.response.data &&
+      error.response.data.error === "invalid_grant"
+    ) {
+      console.error(
+        "Refresh token is invalid or revoked. Need to re-authenticate.",
+        error
+      );
+      return res
+        .status(401)
+        .json({ error: "Authentication failed. Refresh token invalid." });
+    }
     console.error("Error pulling blogs:", error);
     res.status(500).json({ error: "Failed to pull blogs" });
   }
