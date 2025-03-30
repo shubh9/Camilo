@@ -376,31 +376,27 @@ class AiService {
               });
             } catch (toolError) {
               console.error(`Error executing tool ${toolName}:`, toolError);
-
-              // Add the tool use to the conversation
-              messages.push({
-                role: "assistant",
-                content: [
-                  {
-                    type: "tool_use",
-                    id: content.id,
-                    name: toolName,
-                    input: toolArgs,
-                  },
-                ],
-              });
-
-              // Add the error as the tool result
+              // Inform Claude about the tool error
               messages.push({
                 role: "user",
                 content: [
                   {
                     type: "tool_result",
                     tool_use_id: content.id,
-                    content: `Error: Failed to execute tool ${toolName}. ${toolError.message}`,
+                    is_error: true,
+                    content: `Tool execution failed: ${toolError.message}`,
                   },
                 ],
               });
+              if (eventEmitter) {
+                eventEmitter.emit("update", {
+                  type: "tool_error",
+                  toolName,
+                  sessionId,
+                  message: `Error executing tool ${toolName}`,
+                  error: toolError.message || "Unknown tool error",
+                });
+              }
             }
           }
         }

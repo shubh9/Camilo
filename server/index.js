@@ -190,25 +190,27 @@ app.post("/message", async (req, res) => {
       await aiService.getRelevantContext(lastUserMessages);
 
     console.log("Generating response with context...");
-    const reply = await aiService.createChatCompletion(
+    // Pass null for eventEmitter if in production to potentially skip SSE emits internally
+    const finalReply = await aiService.createChatCompletion(
       messages,
       blogSegments,
       similarQuestions,
       similarConversations,
       safeMode,
       "claude",
-      messageEventEmitter,
+      process.env.NODE_ENV === "production" ? null : messageEventEmitter, // Pass null in production
       sessionId
     );
 
     // Save the message and response to Supabase
     const latestUserMessage = userMessages[userMessages.length - 1];
+    // Use the finalReply for saving
     const { error: supabaseError } = await supabase
       .from("messagesReceived")
       .insert([
         {
           question: latestUserMessage.content,
-          answer: reply,
+          answer: finalReply,
         },
       ]);
 
@@ -216,10 +218,11 @@ app.post("/message", async (req, res) => {
       console.error("Error saving to Supabase:", supabaseError);
     }
 
-    console.log("reply:", reply);
+    console.log("Final reply sent to client:", finalReply);
 
+    // Send the final reply immediately back to the client
     res.json({
-      reply,
+      reply: finalReply,
     });
   } catch (error) {
     console.error("Error processing message:", error);
