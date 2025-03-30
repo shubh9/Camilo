@@ -84,8 +84,6 @@ passport.use(
       scope: ["profile", "email", "https://www.googleapis.com/auth/blogger"],
     },
     function (accessToken, refreshToken, profile, cb) {
-      console.log("Access Token received:", !!accessToken);
-      console.log("Refresh Token received:", !!refreshToken);
       if (refreshToken) {
         console.log("Actual Refresh Token:", refreshToken);
       } else {
