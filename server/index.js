@@ -31,24 +31,26 @@ const messageEventEmitter = new EventEmitter();
 messageEventEmitter.setMaxListeners(100);
 
 // Configure CORS with specific options
-const corsOptions = {
-  origin: [
-    "https://www.shubh.run",
-    "https://shubh.run",
-    "http://www.shubh.run",
-    "http://shubh.run",
-    "http://localhost:3000",
-  ],
-  methods: "*",
-  allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: true,
-  optionsSuccessStatus: 200,
-};
+// const corsOptions = {
+//   origin: [
+//     "https://www.shubh.run",
+//     "https://shubh.run",
+//     "http://www.shubh.run",
+//     "http://shubh.run",
+//     "http://localhost:3000",
+//   ],
+//   methods: "*",
+//   allowedHeaders: ["Content-Type", "Authorization"],
+//   credentials: true,
+//   optionsSuccessStatus: 200,
+// };
 
-// Enable pre-flight requests for all routes
-app.options("*", cors(corsOptions));
+// // Enable pre-flight requests for all routes
+// app.options("*", cors(corsOptions));
 
-app.use(cors(corsOptions));
+// app.use(cors(corsOptions));
+
+app.use(cors());
 app.use(express.json());
 
 // Session configuration
