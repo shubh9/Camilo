@@ -30,6 +30,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         credentials: "include",
       });
       const data = await response.json();
+      console.log("authentication data:", data);
       if (data.isAuthenticated) {
         setUser(data.user);
       }

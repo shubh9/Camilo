@@ -598,7 +598,6 @@ function AppContent() {
     // Generate a new session ID and store in ref
     const newSessionId = uuidv4();
     sessionIdRef.current = newSessionId;
-    console.log("Created new session ID:", newSessionId);
 
     try {
       // Convert chatSegments to messages for the API
