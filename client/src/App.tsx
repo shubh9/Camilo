@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import styled from "styled-components";
 // import LoadingDots from "./components/LoadingDots";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { updateBlogsFromBlogger } from "./services/blogParser";
 import LoadingSnakes from "loading-snakes";
+import { v4 as uuidv4 } from "uuid";
 
 // Color variables
 const white = "#ffffff";
@@ -136,6 +137,29 @@ interface Message {
   content: string;
   isAI: boolean;
   links?: { [key: number]: string };
+}
+
+interface Tool {
+  content: string;
+  status: "running" | "success" | "error";
+  toolName: string;
+  isAI: true;
+  error?: string;
+  timestamp: Date;
+}
+
+type ChatSegment = Message | Tool;
+
+// Add a new interface for SSE update events
+interface UpdateEvent {
+  type: string;
+  message: string;
+  timestamp: Date;
+  content?: string;
+  toolName?: string;
+  toolArgs?: any;
+  error?: any;
+  result?: any;
 }
 
 // Constants
@@ -317,11 +341,93 @@ const SubmitButton = styled.button`
   }
 `;
 
+// Simplified processing updates container
+const ProcessingUpdatesContainer = styled.div`
+  position: fixed;
+  bottom: 100px;
+  right: 20px;
+  width: 350px;
+  max-height: 300px;
+  overflow-y: auto;
+  background-color: ${white}88;
+  border-radius: 10px;
+  padding: 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+  backdrop-filter: blur(5px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  font-family: "Courier New", monospace;
+  font-size: 12px;
+`;
+
+const UpdateHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  padding-bottom: 5px;
+  margin-bottom: 5px;
+`;
+
+// Simple update item without complex styling by type
+const UpdateEntry = styled.div`
+  margin-bottom: 8px;
+  padding: 5px;
+  border-radius: 5px;
+  font-size: 12px;
+`;
+
+// New styled components for inline tool updates
+const ToolUpdateContainer = styled.div`
+  display: flex;
+  align-items: center;
+  margin: 8px 0;
+  padding: 6px 10px;
+  font-size: 14px;
+  color: ${black}DD;
+  background-color: ${white}22;
+  border-radius: 8px;
+  border-left: 3px solid ${buttonBlue}88;
+`;
+
+const ToolIcon = styled.span`
+  margin-right: 8px;
+  font-size: 18px;
+`;
+
+const ToolName = styled.span`
+  font-weight: bold;
+  margin-right: 8px;
+  color: ${black};
+`;
+
+const LoadingIcon = styled.span`
+  display: inline-block;
+  animation: spin 1.2s linear infinite;
+  margin-left: 5px;
+  color: ${buttonBlue};
+  font-size: 16px;
+
+  @keyframes spin {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+`;
+
+const ToolStatusIcon = styled.span`
+  margin-left: 5px;
+  font-size: 16px;
+`;
+
 // Main Component
 function AppContent() {
   const { isAuthenticated, isLoading, user, login, logout, checkAuthStatus } =
     useAuth();
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [chatSegments, setChatSegments] = useState<ChatSegment[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [isPullingBlogs, setIsPullingBlogs] = useState(false);
@@ -330,11 +436,76 @@ function AppContent() {
   const [showTooltip, setShowTooltip] = useState(false);
   const [securityAnswer, setSecurityAnswer] = useState("");
   const [securityError, setSecurityError] = useState("");
+  const sessionIdRef = useRef<string>("");
+  const sseRef = useRef<EventSource | null>(null);
+
+  // Helper function to determine if a segment is a Message
+  const isMessage = (segment: ChatSegment): segment is Message => {
+    return !("toolName" in segment);
+  };
+
+  // Helper function to determine if a segment is a Tool
+  const isTool = (segment: ChatSegment): segment is Tool => {
+    return "toolName" in segment;
+  };
 
   // Check authentication status when component mounts
   useEffect(() => {
     checkAuthStatus();
   }, [checkAuthStatus]);
+
+  // Add a function to connect to SSE
+  const connectToSSE = () => {
+    // Close any existing connection
+    if (sseRef.current) {
+      sseRef.current.close();
+    }
+
+    // Create a new SSE connection
+    const sse = new EventSource(`${serverUrl}/sse-message`);
+    sseRef.current = sse;
+
+    sse.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        handleSSEMessage(data);
+      } catch (error) {
+        console.error("Error parsing SSE event:", error);
+      }
+    };
+
+    sse.onerror = (error) => {
+      console.error("SSE connection error:", error);
+      // Try to reconnect after a delay
+      setTimeout(() => {
+        connectToSSE();
+      }, 3000);
+    };
+
+    return () => {
+      sse.close();
+      sseRef.current = null;
+    };
+  };
+
+  // Connect to SSE when component mounts
+  useEffect(() => {
+    connectToSSE();
+    return () => {
+      if (sseRef.current) {
+        sseRef.current.close();
+      }
+    };
+  }, []);
+
+  // Format timestamp for display
+  const formatTimestamp = (date: Date) => {
+    return date.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  };
 
   if (isLoading) {
     return (
@@ -366,39 +537,6 @@ function AppContent() {
         setSafeMode(true);
       }
     }
-  };
-
-  const processResponseText = (
-    text: string,
-    linkData: { [key: string]: string }
-  ): { processedText: string; links: { [key: number]: string } } => {
-    const links: { [key: number]: string } = {};
-    let linkCounter = 1;
-    const idToNumberMap: { [key: string]: number } = {};
-    const urlToNumberMap: { [key: string]: number } = {};
-
-    // Replace segment IDs with sequential numbers
-    console.log("linkData:", linkData);
-    console.log("text:", text);
-    const processedText = text.replace(/\[(\d+)]/g, (match, segmentId) => {
-      const url = linkData[segmentId];
-
-      // Check if this URL has already been assigned a number
-      if (urlToNumberMap[url]) {
-        idToNumberMap[segmentId] = urlToNumberMap[url];
-        return `[${urlToNumberMap[url]}]`;
-      }
-
-      // Otherwise, assign a new number and store the URL
-      idToNumberMap[segmentId] = linkCounter;
-      urlToNumberMap[url] = linkCounter;
-      links[linkCounter] = url;
-      linkCounter++;
-
-      return `[${idToNumberMap[segmentId]}]`;
-    });
-
-    return { processedText, links };
   };
 
   const renderMessageWithLinks = (
@@ -434,51 +572,52 @@ function AppContent() {
     e.preventDefault();
     if (inputMessage.trim() === "" || loading) return;
 
-    const userMessage = { content: inputMessage, isAI: false };
-    setMessages((prev) => [...prev, userMessage]);
+    // Create a user message segment
+    const userMessage: Message = { content: inputMessage, isAI: false };
+    setChatSegments((prev) => [...prev, userMessage]);
     setInputMessage("");
     setLoading(true);
 
+    // Generate a new session ID and store in ref
+    const newSessionId = uuidv4();
+    sessionIdRef.current = newSessionId;
+    console.log("Created new session ID:", newSessionId);
+
     try {
-      const response = await fetch(`${serverUrl}/message`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          messages: [...messages, userMessage],
-          safeMode: safeMode,
-        }),
-      });
+      // Convert chatSegments to messages for the API
+      const messagesForAPI = chatSegments.filter(isMessage).map((segment) => ({
+        content: segment.content,
+        isAI: segment.isAI,
+        links: "links" in segment ? segment.links : undefined,
+      }));
+
+      const response = await fetch(
+        `${serverUrl}/message?sessionId=${newSessionId}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            messages: [...messagesForAPI, userMessage],
+            safeMode: safeMode,
+          }),
+        }
+      );
       if (!response.ok) {
         throw new Error("Server returned " + response.status);
       }
 
-      const data = await response.json();
-
-      let processedText = data.reply;
-      let links = undefined;
-      if (data.reply) {
-        const processedData = processResponseText(data.reply, data.linkData);
-        processedText = processedData.processedText;
-        links = processedData.links;
-      } else {
-        throw new Error("Got empty server response");
-      }
-
-      const aiMessage = {
-        content: processedText,
-        isAI: true,
-        links,
-      };
-
-      setMessages((prev) => [...prev, aiMessage]);
-    } catch (error) {
+      // Wait for the request to complete, but don't process the response
+      // All message updates will come through SSE events instead
+      await response.json();
+    } catch (error: any) {
       console.error("Error:", error);
-      setMessages((prev) => [
+      // Show error as a new AI message
+      setChatSegments((prev) => [
         ...prev,
         {
-          content: String("Sorry it seems like somethings wrong!  " + error),
+          content: String("Sorry, something went wrong! " + error),
           isAI: true,
         },
       ]);
@@ -503,6 +642,7 @@ function AppContent() {
     if (securityAnswer.trim() === "Blaze") {
       setSafeMode(false);
       setShowTooltip(false);
+
       setSecurityAnswer("");
       setSecurityError(""); // Clear any error
     } else {
@@ -512,8 +652,166 @@ function AppContent() {
     }
   };
 
-  // suggested questions:
-  // How did your early experiences with coding shape your approach to problem-solving in your current projects?
+  // New function to render tool segments
+  const renderToolSegment = (tool: Tool) => {
+    const isRunning = tool.status === "running";
+    const isSuccess = tool.status === "success";
+    const isError = tool.status === "error";
+
+    // Format tool name for display - convert snake_case to Title Case
+    const formattedToolName = tool.toolName
+      ? tool.toolName
+          .split("_")
+          .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(" ")
+      : "Unknown Tool";
+
+    // Create a unique key by combining timestamp with toolName
+    const uniqueKey = `${tool.timestamp.toString()}-${tool.toolName}`;
+
+    return (
+      <ToolUpdateContainer key={uniqueKey}>
+        <ToolIcon>🛠️</ToolIcon>
+        <ToolName>{formattedToolName}</ToolName>
+        {isRunning && <LoadingIcon>⟳</LoadingIcon>}
+        {isSuccess && <ToolStatusIcon>✅</ToolStatusIcon>}
+        {isError && <ToolStatusIcon>❌</ToolStatusIcon>}
+        {isError && tool.error && (
+          <span style={{ color: "red", marginLeft: "8px", fontSize: "12px" }}>
+            Error: {tool.error}
+          </span>
+        )}
+        <div style={{ marginLeft: "8px", fontSize: "14px" }}>
+          {tool.content}
+        </div>
+      </ToolUpdateContainer>
+    );
+  };
+
+  // Modified function to handle the SSE message - each event creates a new message
+  const handleSSEMessage = (data: any) => {
+    console.log("sse data:", data);
+    console.log("Current sessionId:", sessionIdRef.current);
+    console.log("data.sessionId:", data.sessionId);
+    console.log(
+      "Match?",
+      data.sessionId === sessionIdRef.current || !data.sessionId
+    );
+
+    if (data.sessionId === sessionIdRef.current || !data.sessionId) {
+      // Handle different types of updates
+      if (data.type === "claude_text") {
+        // For claude_text updates, always create a new AI message
+        if (data.content) {
+          const newMessage: Message = {
+            content: data.content,
+            isAI: true,
+          };
+          console.log("newMessage:", newMessage);
+          setChatSegments((prev) => [...prev, newMessage]);
+        }
+      } else if (data.type === "tool_call") {
+        // Create a new tool segment with running status
+        const toolSegment: Tool = {
+          content: data.message || "Running tool...",
+          status: "running",
+          toolName: data.toolName || "unknown_tool",
+          isAI: true,
+          timestamp: new Date(),
+        };
+        console.log("toolSegment:", toolSegment);
+        setChatSegments((prev) => [...prev, toolSegment]);
+      } else if (data.type === "tool_success") {
+        // Find the last matching tool call and update its status
+        // or create a new tool segment with success status
+        console.log("tool_success:", data);
+        setChatSegments((prevSegments) => {
+          const newSegments = [...prevSegments];
+          let toolUpdated = false;
+
+          // Try to find matching tool call to update
+          for (let i = newSegments.length - 1; i >= 0; i--) {
+            const segment = newSegments[i];
+            if (
+              isTool(segment) &&
+              segment.toolName === data.toolName &&
+              segment.status === "running"
+            ) {
+              newSegments[i] = {
+                ...segment,
+                status: "success" as const,
+                content: data.message || "Tool completed successfully",
+              };
+              toolUpdated = true;
+              break;
+            }
+          }
+
+          // If no matching tool found, create a new tool segment
+          if (!toolUpdated) {
+            newSegments.push({
+              content: data.message || "Tool completed successfully",
+              status: "success" as const,
+              toolName: data.toolName || "unknown_tool",
+              isAI: true,
+              timestamp: new Date(),
+            });
+          }
+
+          return newSegments;
+        });
+      } else if (data.type === "tool_error") {
+        // Find the last matching tool call and update its status
+        // or create a new tool segment with error status
+        console.log("tool_error:", data);
+        setChatSegments((prevSegments) => {
+          const newSegments = [...prevSegments];
+          let toolUpdated = false;
+
+          // Try to find matching tool call to update
+          for (let i = newSegments.length - 1; i >= 0; i--) {
+            const segment = newSegments[i];
+            if (
+              isTool(segment) &&
+              segment.toolName === data.toolName &&
+              segment.status === "running"
+            ) {
+              newSegments[i] = {
+                ...segment,
+                status: "error" as const,
+                content: data.message || "Tool failed",
+                error:
+                  typeof data.error === "string"
+                    ? data.error
+                    : "Execution failed",
+              };
+              toolUpdated = true;
+              break;
+            }
+          }
+
+          // If no matching tool found, create a new tool segment
+          if (!toolUpdated) {
+            newSegments.push({
+              content: data.message || "Tool failed",
+              status: "error" as const,
+              toolName: data.toolName || "unknown_tool",
+              isAI: true,
+              error:
+                typeof data.error === "string"
+                  ? data.error
+                  : "Execution failed",
+              timestamp: new Date(),
+            });
+          }
+
+          return newSegments;
+        });
+      } else {
+        console.error("Error no type found: ", data);
+      }
+    }
+  };
 
   return (
     <AppContainer theme={{ safeMode }}>
@@ -532,7 +830,7 @@ function AppContent() {
         <Title>
           Chat with{" "}
           <span style={{ position: "relative" }}>
-            <TitleSpan onClick={() => handleTitleClick("S")}>S</TitleSpan>
+            <TitleSpan onClick={() => handleTitleClick("S")}>"S</TitleSpan>
             <Tooltip $show={showTooltip}>
               <TooltipTitle>Turn off Safe mode</TooltipTitle>
               <div style={{ marginBottom: "10px", fontSize: "14px" }}>
@@ -565,16 +863,20 @@ function AppContent() {
             </Tooltip>
           </span>
           h<TitleSpan onClick={() => handleTitleClick("u")}>u</TitleSpan>
-          bh
+          bh"
         </Title>
         <MessagesContainer>
-          {messages.map((message, index) =>
-            message.isAI ? (
-              <AIMessage key={index}>
-                {renderMessageWithLinks(message.content, message.links)}
-              </AIMessage>
+          {chatSegments.map((segment, index) =>
+            isMessage(segment) ? (
+              segment.isAI ? (
+                <AIMessage key={index}>
+                  {renderMessageWithLinks(segment.content, segment.links)}
+                </AIMessage>
+              ) : (
+                <UserMessage key={index}>{segment.content}</UserMessage>
+              )
             ) : (
-              <UserMessage key={index}>{message.content}</UserMessage>
+              renderToolSegment(segment)
             )
           )}
           {loading && (
