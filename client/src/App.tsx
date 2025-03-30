@@ -461,8 +461,10 @@ function AppContent() {
       sseRef.current.close();
     }
 
-    // Create a new SSE connection
-    const sse = new EventSource(`${serverUrl}/sse-message`);
+    // Create a new SSE connection with credentials
+    const sse = new EventSource(`${serverUrl}/sse-message`, {
+      withCredentials: true, // Add this option
+    });
     sseRef.current = sse;
 
     sse.onmessage = (event) => {
@@ -475,22 +477,37 @@ function AppContent() {
     };
 
     sse.onerror = (error) => {
+      // Check if we're in production
+      if (process.env.NODE_ENV === "production") {
+        // In production, just log the error without attempting to reconnect
+        console.log("SSE connection not available in production");
+        if (sseRef.current) {
+          sseRef.current.close();
+          sseRef.current = null;
+        }
+        return;
+      }
+
       console.error("SSE connection error:", error);
-      // Try to reconnect after a delay
+      // Only try to reconnect in development
       setTimeout(() => {
         connectToSSE();
       }, 3000);
     };
 
     return () => {
-      sse.close();
-      sseRef.current = null;
+      if (sseRef.current) {
+        sseRef.current.close();
+        sseRef.current = null;
+      }
     };
   };
 
-  // Connect to SSE when component mounts
+  // Connect to SSE when component mounts, but only in development
   useEffect(() => {
-    connectToSSE();
+    if (process.env.NODE_ENV !== "production") {
+      connectToSSE();
+    }
     return () => {
       if (sseRef.current) {
         sseRef.current.close();
@@ -605,12 +622,27 @@ function AppContent() {
         }
       );
       if (!response.ok) {
-        throw new Error("Server returned " + response.status);
+        const errorData = await response.json(); // Try to get error details from server
+        throw new Error(
+          errorData.error || `Server returned ${response.status}`
+        );
       }
 
-      // Wait for the request to complete, but don't process the response
-      // All message updates will come through SSE events instead
-      await response.json();
+      // Process the JSON response directly to get the AI reply
+      const data = await response.json();
+
+      if (data.reply) {
+        const aiMessage: Message = {
+          content: data.reply,
+          isAI: true,
+        };
+        setChatSegments((prev) => [...prev, aiMessage]);
+      } else {
+        // Handle cases where reply might be missing, though ideally server should always send it
+        console.warn("No reply received from server in POST response.");
+      }
+
+      // Note: SSE is still connected in dev for tool updates, but we no longer rely on it for the main message
     } catch (error: any) {
       console.error("Error:", error);
       // Show error as a new AI message
