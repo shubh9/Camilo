@@ -203,18 +203,26 @@ class MCPClientManager {
 const createMCPClientManager = (anthropicClient) => {
   const mcpClientManager = new MCPClientManager(anthropicClient);
 
-  // Initialize MCP client connection when the module is loaded
+  // Initialize MCP client connection when the module is loaded, unless in production
   (async () => {
-    try {
-      console.log("Initializing MCP client connection at startup...");
-      const connected = await mcpClientManager.init();
+    if (process.env.NODE_ENV !== "production") {
+      try {
+        console.log("Initializing MCP client connection at startup...");
+        const connected = await mcpClientManager.init();
+        console.log(
+          `MCP client connection initialization ${
+            connected ? "successful" : "failed"
+          } at startup`
+        );
+      } catch (error) {
+        console.error("Error initializing MCP client at startup:", error);
+      }
+    } else {
       console.log(
-        `MCP client connection initialization ${
-          connected ? "successful" : "failed"
-        } at startup`
+        "Skipping MCP client initialization in production environment."
       );
-    } catch (error) {
-      console.error("Error initializing MCP client at startup:", error);
+      // Ensure the manager knows it's not connected if init is skipped
+      mcpClientManager.connected = false;
     }
   })();
 
