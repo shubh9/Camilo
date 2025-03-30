@@ -24,6 +24,12 @@ const supabase = createClient(
   process.env.SUPABASE_KEY
 );
 
+// Add EventEmitter for SSE implementation
+const EventEmitter = require("events");
+const messageEventEmitter = new EventEmitter();
+// Set higher limit for event listeners
+messageEventEmitter.setMaxListeners(100);
+
 // Configure CORS with specific options
 const corsOptions = {
   origin: [
@@ -145,17 +151,39 @@ app.get("/", (req, res) => {
   res.send("Hello World");
 });
 
+// Add a new SSE endpoint for streaming message updates
+app.get("/sse-message", (req, res) => {
+  // Set headers for SSE
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+  });
+
+  // Function to handle SSE events
+  const sseHandler = (event) => {
+    res.write(`data: ${JSON.stringify(event)}\n\n`);
+  };
+
+  // Register the event handler
+  messageEventEmitter.on("update", sseHandler);
+
+  // Handle client disconnect
+  req.on("close", () => {
+    messageEventEmitter.removeListener("update", sseHandler);
+  });
+});
+
+// Modify the existing message endpoint
 app.post("/message", async (req, res) => {
   const { messages, safeMode } = req.body;
-
-  console.log("safeMode:", safeMode);
+  const sessionId = req.query.sessionId || "default";
   // Filter to get only user messages
   const userMessages = messages.filter((message) => message.isAI === false);
   // Get the last 4 user messages
   const lastUserMessages = userMessages.slice(-4);
 
   try {
-    // Get relevant context using the new method
     const { blogSegments, similarQuestions, similarConversations } =
       await aiService.getRelevantContext(lastUserMessages);
 
@@ -165,7 +193,10 @@ app.post("/message", async (req, res) => {
       blogSegments,
       similarQuestions,
       similarConversations,
-      safeMode
+      safeMode,
+      "claude",
+      messageEventEmitter,
+      sessionId
     );
 
     // Save the message and response to Supabase

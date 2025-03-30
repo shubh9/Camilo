@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "brave-search": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-brave-search"]
+    },
+    "gmail": {
+      "command": "npx",
+      "args": ["-y", "@gongrzhe/server-gmail-autoauth-mcp"]
+    },
+    "google-calendar": {
+      "command": "npx",
+      "args": ["-y", "@gongrzhe/server-calendar-mcp"]
+    }
+  }
+}

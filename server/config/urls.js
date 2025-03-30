@@ -1,7 +1,7 @@
 // URL Configuration
 const DEV_CLIENT_URL = "http://localhost:3000";
 const PROD_CLIENT_URL = "https://shubh.run";
-const PROD_SERVER_URL = "https://camilo-xn71.vercel.app";
+const PROD_SERVER_URL = "https://camilo-server.vercel.app";
 const DEV_SERVER_URL = "http://localhost:3001";
 
 const CLIENT_URL =

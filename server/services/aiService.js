@@ -1,20 +1,22 @@
 const { OpenAI, AzureOpenAI } = require("openai");
 const { createClient } = require("@supabase/supabase-js");
+const Anthropic = require("@anthropic-ai/sdk");
+const fs = require("fs");
+const path = require("path");
+const { createMCPClientManager } = require("./mcpService");
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_KEY
 );
 
-// Initialize both OpenAI clients
-const azure_client = new AzureOpenAI({
-  apiKey: process.env.AZURE_OPENAI_KEY,
-  endpoint: process.env.AZURE_OPENAI_ENDPOINT,
-  apiVersion: "2024-02-15-preview",
-});
-
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
+});
+
+// Initialize Anthropic client
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
 const MATCH_THRESHOLD = 0.02;
@@ -46,6 +48,9 @@ const clonePrompt = `You role is to act like someone else named Shubh. Below you
     Answer: I've worked at a couple places. 4 years ago I did a coop at Abebooks in Victoria, BC as a software developer. Right after that I did a coop as PM at Rogers. That was fun I got to lead a team of people although I realize now I probably should have continued to work as a developer instead of a PM.
 `;
 // add for guardrail     Answer questions about Entrepreneurship, startups, technology, work-life balance, career. Don't answer questions about dating, parent relationships, insecurities, or anything that's not related to the above topics.
+
+// Create MCP client manager instance
+const mcpClientManager = createMCPClientManager(anthropic);
 
 class AiService {
   async generateEmbedding(text) {
@@ -98,18 +103,6 @@ class AiService {
     return data;
   }
 
-  async getBlogContentBySegmentId(segmentIds) {
-    if (!segmentIds || segmentIds.length === 0) return [];
-
-    const { data, error } = await supabase
-      .from("shubhsblogs")
-      .select("*")
-      .in("id", segmentIds);
-
-    if (error) throw error;
-    return data;
-  }
-
   formatChatHistory(messages) {
     let lastMessage = null;
     let messagesToFormat = [...messages];
@@ -138,7 +131,10 @@ class AiService {
     blogSegments,
     similarQuestions,
     similarConversations,
-    safeMode = true
+    safeMode = true,
+    service = "claude",
+    eventEmitter = null,
+    sessionId = "default"
   ) {
     try {
       const startTime = Date.now();
@@ -150,8 +146,18 @@ class AiService {
       const questionsText = this.formatSimilarQuestions(similarQuestions);
       const similarConversationsText =
         this.formatSimilarConversations(similarConversations);
+      let useMCP = false;
 
-      console.log("safeMode: ", safeMode);
+      if (
+        service === "claude" &&
+        mcpClientManager.connected &&
+        mcpClientManager.tools.length > 0
+      ) {
+        useMCP = true;
+        console.log("using mcp claude");
+      } else {
+        console.log("no mcp using openai");
+      }
 
       const prompt = this.combineIntoPrompt(
         clonePrompt,
@@ -160,34 +166,252 @@ class AiService {
         questionsText,
         similarConversationsText,
         lastMessage,
-        safeMode ? safeModePrompt : null
+        safeMode ? safeModePrompt : null,
+        useMCP
       );
+      console.log("prompt:", prompt);
 
-      console.log("prompt: ", prompt);
-
-      const response = await openai.chat.completions.create({
-        model: "gpt-4.5-preview",
-        messages: [
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-      });
+      // Choose service based on parameter
+      let response;
+      if (useMCP) {
+        response = await this._createClaudeCompletionWithMCP(
+          prompt,
+          eventEmitter,
+          sessionId
+        );
+      } else {
+        response = await this._createOpenAICompletion(
+          prompt,
+          eventEmitter,
+          sessionId
+        );
+      }
 
       const endTime = Date.now();
       const duration = (endTime - startTime) / 1000;
       console.log(`Response generated in ${duration} seconds`);
 
       // Clean the response by removing text between square brackets
-      const cleanedResponse = response.choices[0].message.content.replace(
-        /\[.*?\]/g,
-        ""
-      );
+      const cleanedResponse = response.replace(/\[.*?\]/g, "");
 
       return cleanedResponse;
     } catch (error) {
       console.error("Error creating chat completion:", error);
+      throw error;
+    }
+  }
+
+  // Helper function for OpenAI completions
+  async _createOpenAICompletion(
+    prompt,
+    eventEmitter = null,
+    sessionId = "default"
+  ) {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-2024-05-13",
+      messages: [
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      max_tokens: 1800,
+    });
+
+    return completion.choices[0].message.content;
+  }
+
+  // Helper function for Anthropic Claude completions
+  async _createClaudeCompletion(
+    prompt,
+    eventEmitter = null,
+    sessionId = "default"
+  ) {
+    const response = await anthropic.messages.create({
+      model: "claude-3-5-sonnet-20240620",
+      max_tokens: 4000,
+      messages: [
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+    });
+
+    return response.content[0].text;
+  }
+
+  // Helper function for Claude completions with MCP
+  async _createClaudeCompletionWithMCP(
+    prompt,
+    eventEmitter = null,
+    sessionId = "default"
+  ) {
+    // Initialize message structure
+    const messages = [
+      {
+        role: "user",
+        content: prompt,
+      },
+    ];
+
+    try {
+      // Initialize variables for the while loop
+      let finalText = [];
+      let continueToolCalls = true;
+
+      while (continueToolCalls) {
+        // Get Claude's response with the current messages
+        const response = await anthropic.messages.create({
+          model: "claude-3-7-sonnet-20250219",
+          max_tokens: 4000,
+          messages,
+          tools: mcpClientManager.tools,
+        });
+
+        // Flag to track if we need to continue the loop
+        let hasToolCalls = false;
+
+        // Process each content item in the response
+        for (const content of response.content) {
+          if (content.type === "text") {
+            finalText.push(content.text);
+            console.log("claude content: ", content);
+            if (eventEmitter) {
+              eventEmitter.emit("update", {
+                type: "claude_text",
+                sessionId,
+                message: "Claude generated text response",
+                content: content.text,
+              });
+            }
+          } else if (content.type === "tool_use") {
+            hasToolCalls = true;
+            console.log("claude tool use!: ", content);
+            const toolName = content.name;
+            const toolArgs = content.input;
+
+            if (eventEmitter) {
+              eventEmitter.emit("update", {
+                type: "tool_call",
+                sessionId,
+                message: `Claude called tool: ${toolName}`,
+                toolName,
+                toolArgs,
+              });
+            }
+
+            try {
+              // Call the tool via MCP
+              const result = await mcpClientManager.callTool(
+                toolName,
+                toolArgs
+              );
+              if (result.isError) {
+                console.error(
+                  `MCP TOOL ERROR: ${JSON.stringify(result.content, null, 2)}`
+                );
+                if (eventEmitter) {
+                  eventEmitter.emit("update", {
+                    type: "tool_error",
+                    toolName:
+                      toolName === "list_events"
+                        ? "Checking calendar"
+                        : toolName,
+                    sessionId,
+                    message: `Error executing tool ${
+                      toolName === "list_events"
+                        ? "Checking calendar"
+                        : toolName
+                    }`,
+                    error: result.content,
+                  });
+                }
+              } else {
+                if (eventEmitter) {
+                  eventEmitter.emit("update", {
+                    type: "tool_success",
+                    toolName:
+                      toolName === "list_events"
+                        ? "Checking calendar"
+                        : toolName,
+                    sessionId,
+                    message: `Successfully executed tool ${
+                      toolName === "list_events"
+                        ? "Checking calendar"
+                        : toolName
+                    }`,
+                    result:
+                      typeof result.content === "string"
+                        ? result.content.substring(0, 100) +
+                          (result.content.length > 100 ? "..." : "")
+                        : "Complex tool result",
+                  });
+                }
+              }
+
+              // Add the tool use to the conversation
+              messages.push({
+                role: "assistant",
+                content: [
+                  {
+                    type: "tool_use",
+                    id: content.id,
+                    name: toolName,
+                    input: toolArgs,
+                  },
+                ],
+              });
+
+              // Add the tool result to the conversation
+              messages.push({
+                role: "user",
+                content: [
+                  {
+                    type: "tool_result",
+                    tool_use_id: content.id,
+                    content: result.content,
+                  },
+                ],
+              });
+            } catch (toolError) {
+              console.error(`Error executing tool ${toolName}:`, toolError);
+
+              // Add the tool use to the conversation
+              messages.push({
+                role: "assistant",
+                content: [
+                  {
+                    type: "tool_use",
+                    id: content.id,
+                    name: toolName,
+                    input: toolArgs,
+                  },
+                ],
+              });
+
+              // Add the error as the tool result
+              messages.push({
+                role: "user",
+                content: [
+                  {
+                    type: "tool_result",
+                    tool_use_id: content.id,
+                    content: `Error: Failed to execute tool ${toolName}. ${toolError.message}`,
+                  },
+                ],
+              });
+            }
+          }
+        }
+
+        // If no tool calls were found, exit the loop
+        continueToolCalls = hasToolCalls;
+      }
+
+      return finalText.join("");
+    } catch (error) {
+      console.error("Error in Claude with MCP:", error);
       throw error;
     }
   }
@@ -250,7 +474,8 @@ class AiService {
     questionsText,
     similarConversationsText,
     currentQuestion,
-    safeModePrompt
+    safeModePrompt,
+    useMCP = false
   ) {
     return `${systemPrompt}\n\n
         &&&
@@ -277,6 +502,14 @@ class AiService {
             : ""
         }
         ${safeModePrompt ? `\n&&&\n${safeModePrompt}\n\n` : ""}
+        &&&
+        ${
+          useMCP
+            ? `\n Be eagar to use the tools available to you to answer the question when relevant! If someone asks what you're doing next week check your calendar (list events). Remember you don't need to use the blog segments if you don't need to, keep your answers to the point. You have access to the following tools:\n${mcpClientManager.tools
+                .map((tool) => tool.name)
+                .join("\n")}\n\n`
+            : ""
+        }
         &&&
         Current question that you are answering: "${currentQuestion}"`;
   }
