@@ -423,6 +423,21 @@ const ToolStatusIcon = styled.span`
   font-size: 16px;
 `;
 
+const LoadingLetter = styled.span`
+  display: inline-block;
+  animation: spin 1s linear infinite;
+  font-size: 1.1em;
+  opacity: 0.8;
+  @keyframes spin {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+`;
+
 // Main Component
 function AppContent() {
   const { isAuthenticated, isLoading, user, login, logout, checkAuthStatus } =
@@ -532,7 +547,7 @@ function AppContent() {
     );
   }
 
-  if (showLoginPrompt && !isAuthenticated) {
+  if (showLoginPrompt) {
     return (
       <LoginContainer>
         <Title>Greetings OG</Title>
@@ -542,9 +557,19 @@ function AppContent() {
   }
 
   const handleTitleClick = async (letter: string) => {
-    if (letter === "u") {
+    if (letter === "a") {
       await checkAuthStatus();
       setShowLoginPrompt(true);
+    } else if (letter === "u") {
+      try {
+        setIsPullingBlogs(true);
+        const result = await updateBlogsFromBlogger();
+        console.log("Blogs pulled successfully:", result);
+      } catch (error) {
+        console.error("Failed to pull blogs:", error);
+      } finally {
+        setIsPullingBlogs(false);
+      }
     } else if (letter === "S") {
       if (safeMode) {
         setShowTooltip(true);
@@ -654,18 +679,6 @@ function AppContent() {
       ]);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handlePullBlogs = async () => {
-    try {
-      setIsPullingBlogs(true);
-      const result = await updateBlogsFromBlogger();
-      console.log("Blogs pulled successfully:", result);
-    } catch (error) {
-      console.error("Failed to pull blogs:", error);
-    } finally {
-      setIsPullingBlogs(false);
     }
   };
 
@@ -846,20 +859,9 @@ function AppContent() {
 
   return (
     <AppContainer theme={{ safeMode }}>
-      {isAuthenticated && (
-        <>
-          <UserInfo>
-            <span>{user?.name}</span>
-            <LogoutButton onClick={logout}>Logout</LogoutButton>
-          </UserInfo>
-          <PullBlogButton onClick={handlePullBlogs} disabled={isPullingBlogs}>
-            {isPullingBlogs ? "Pulling..." : "Pull Blog"}
-          </PullBlogButton>
-        </>
-      )}
       <ChatContainer>
         <Title>
-          Chat with{" "}
+          Ch<TitleSpan onClick={() => handleTitleClick("a")}>a</TitleSpan>t with{" "}
           <span style={{ position: "relative" }}>
             <TitleSpan onClick={() => handleTitleClick("S")}>"S</TitleSpan>
             <Tooltip $show={showTooltip}>
@@ -893,7 +895,12 @@ function AppContent() {
               <SubmitButton onClick={handleSecuritySubmit}>Submit</SubmitButton>
             </Tooltip>
           </span>
-          h<TitleSpan onClick={() => handleTitleClick("u")}>u</TitleSpan>
+          h
+          {isPullingBlogs ? (
+            <LoadingLetter>◌</LoadingLetter>
+          ) : (
+            <TitleSpan onClick={() => handleTitleClick("u")}>u</TitleSpan>
+          )}
           bh"
         </Title>
         <MessagesContainer>
