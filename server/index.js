@@ -74,6 +74,18 @@ app.use(
 app.use(passport.initialize());
 app.use(passport.session());
 
+const SCOPES = [
+  "https://www.googleapis.com/auth/gmail.readonly",
+  "https://www.googleapis.com/auth/gmail.modify",
+  "https://www.googleapis.com/auth/gmail.labels",
+  "https://www.googleapis.com/auth/blogger",
+  "https://www.googleapis.com/auth/contacts.readonly",
+  "https://www.googleapis.com/auth/userinfo.profile",
+  "https://www.googleapis.com/auth/directory.readonly",
+  "profile",
+  "email",
+];
+
 // Passport configuration
 passport.use(
   new GoogleStrategy(
@@ -81,14 +93,13 @@ passport.use(
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
       callbackURL: GOOGLE_CALLBACK_URL,
-      scope: ["profile", "email", "https://www.googleapis.com/auth/blogger"],
+      scope: SCOPES,
+      accessType: "offline",
     },
     function (accessToken, refreshToken, profile, cb) {
-      if (refreshToken) {
-        console.log("Actual Refresh Token:", refreshToken);
-      } else {
-        console.log("No refresh token was issued!");
-      }
+      console.log("Access Token:", accessToken);
+      console.log("Refresh Token:", refreshToken);
+      console.log("Profile:", profile);
 
       const oauth2Client = new google.auth.OAuth2(
         process.env.GOOGLE_CLIENT_ID,
@@ -99,7 +110,7 @@ passport.use(
       oauth2Client.setCredentials({
         access_token: accessToken,
         refresh_token: refreshToken,
-        scope: ["https://www.googleapis.com/auth/blogger"],
+        scope: SCOPES,
       });
 
       const user = {
@@ -130,7 +141,7 @@ app.get(
     next();
   },
   passport.authenticate("google", {
-    scope: ["profile", "email", "https://www.googleapis.com/auth/blogger"],
+    scope: SCOPES,
     accessType: "offline",
     prompt: "consent",
   })

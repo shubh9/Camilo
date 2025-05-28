@@ -23,7 +23,7 @@ const MATCH_THRESHOLD = 0.02;
 const MAX_MATCH_COUNT = 5;
 
 const safeModePrompt =
-  "SAFE MODE IS ON: \n Only answer questions related to work, technology, etc. Only professional things. For personal questions stay very surface level and only say nice things, nothing deep, no drama, don't talk about romantic relationships in any capacity. Don't go into any detail on personal things !";
+  "SAFE MODE IS ON: \n Only answer questions related to work, technology, etc. Only professional things. For personal questions stay very surface level and only say nice things, nothing deep, no drama, don't talk about romantic relationships in any capacity. Don't go into any detail on personal things!";
 
 // System prompts for different contexts
 const clonePrompt = `You role is to act like someone else named Shubh. Below you will be given context from Shubh's blog that may be relevant to the user's question. 
@@ -148,16 +148,16 @@ class AiService {
         this.formatSimilarConversations(similarConversations);
       let useMCP = false;
 
-      if (
-        service === "claude" &&
-        mcpClientManager.connected &&
-        mcpClientManager.tools.length > 0
-      ) {
-        useMCP = true;
-        console.log("using mcp claude");
-      } else {
-        console.log("no mcp using openai");
-      }
+      // if (
+      //   service === "claude" &&
+      //   mcpClientManager.connected &&
+      //   mcpClientManager.tools.length > 0
+      // ) {
+      //   useMCP = true;
+      //   console.log("using mcp claude");
+      // } else {
+      //   console.log("no mcp using openai");
+      // }
 
       const prompt = this.combineIntoPrompt(
         clonePrompt,
@@ -208,7 +208,7 @@ class AiService {
     sessionId = "default"
   ) {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-2024-05-13",
+      model: "gpt-4.1",
       messages: [
         {
           role: "user",
@@ -473,6 +473,7 @@ class AiService {
     safeModePrompt,
     useMCP = false
   ) {
+    console.log("useMCP: ", useMCP);
     return `${systemPrompt}\n\n
         &&&
         Today's date: ${new Date().toLocaleDateString("en-US", {

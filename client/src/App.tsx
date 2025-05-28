@@ -453,6 +453,7 @@ function AppContent() {
   const [securityError, setSecurityError] = useState("");
   const sessionIdRef = useRef<string>("");
   const sseRef = useRef<EventSource | null>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
 
   // Helper function to determine if a segment is a Message
   const isMessage = (segment: ChatSegment): segment is Message => {
@@ -468,6 +469,28 @@ function AppContent() {
   useEffect(() => {
     checkAuthStatus();
   }, [checkAuthStatus]);
+
+  // Add click outside handler for tooltip
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        tooltipRef.current &&
+        !tooltipRef.current.contains(event.target as Node)
+      ) {
+        setShowTooltip(false);
+        setSecurityError("");
+        setSecurityAnswer("");
+      }
+    };
+
+    if (showTooltip) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showTooltip]);
 
   // Add a function to connect to SSE
   const connectToSSE = () => {
@@ -744,17 +767,8 @@ function AppContent() {
 
     if (data.sessionId === sessionIdRef.current || !data.sessionId) {
       // Handle different types of updates
-      if (data.type === "claude_text") {
-        // For claude_text updates, always create a new AI message
-        if (data.content) {
-          const newMessage: Message = {
-            content: data.content,
-            isAI: true,
-          };
-          console.log("newMessage:", newMessage);
-          setChatSegments((prev) => [...prev, newMessage]);
-        }
-      } else if (data.type === "tool_call") {
+      // Note: claude_text is now handled in the POST response, not here
+      if (data.type === "tool_call") {
         // Create a new tool segment with running status
         const toolSegment: Tool = {
           content: data.message || "Running tool...",
@@ -864,7 +878,7 @@ function AppContent() {
           Ch<TitleSpan onClick={() => handleTitleClick("a")}>a</TitleSpan>t with{" "}
           <span style={{ position: "relative" }}>
             <TitleSpan onClick={() => handleTitleClick("S")}>"S</TitleSpan>
-            <Tooltip $show={showTooltip}>
+            <Tooltip $show={showTooltip} ref={tooltipRef}>
               <TooltipTitle>Turn off Safe mode</TooltipTitle>
               <div style={{ marginBottom: "10px", fontSize: "14px" }}>
                 What is Shubh's gamer tag?
