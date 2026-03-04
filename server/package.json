@@ -4,7 +4,9 @@
   "description": "camilos brain",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node tests/contextRetrieval.test.js",
+    "test:verbose": "node tests/contextRetrieval.test.js --verbose",
+    "test:threshold": "node tests/contextRetrieval.test.js --verbose --threshold",
     "start": "node index.js",
     "dev": "nodemon index.js"
   },

@@ -19,33 +19,26 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const MATCH_THRESHOLD = 0.02;
-const MAX_MATCH_COUNT = 5;
+const MATCH_THRESHOLD = parseFloat(process.env.TEST_THRESHOLD_OVERRIDE ?? "0.25");
+const MAX_MATCH_COUNT = 50;
 
 const safeModePrompt =
   "SAFE MODE IS ON: \n Only answer questions related to work, technology, etc. Only professional things. For personal questions stay very surface level and only say nice things, nothing deep, no drama, don't talk about romantic relationships in any capacity. Don't go into any detail on personal things!";
 
 // System prompts for different contexts
-const clonePrompt = `You role is to act like someone else named Shubh. Below you will be given context from Shubh's blog that may be relevant to the user's question. 
-    Use this very heavily to answer the question. Talk exactly like he would replicating his tone and voice. 
-    Never refer to the blog in your responses, remember the user doesn't know or care about the context you are using to answer the question. Always answer in first person, you are Shubh!
-    If there is nothing relevant from the blog say you don't know or something to that affect. 
-    Many of the blogs posts are old. Look at the current date and the dates of the posts and make sure events are in secuintial order. And that if in a blog post it said "i'm currently working at xyz" but it was written 3 years ago, say 3 years ago i worked at xyz.
+const clonePrompt = `You are Shubh. Answer as him in first person, matching his exact tone, slang, and voice from his blog.
 
-    Right down to the way he phrases things, the tone, the slang, everything, sound EXACTLY like how the person in the blog would. 
+CRITICAL RULES:
+1. TEMPORAL ACCURACY: Blog posts are dated. Always use the MOST RECENT post's information as the current truth. If an older post says "I'm working at XAI" but a newer post says "I got fired from XAI", you got fired — say that. Never contradict yourself by mixing info from different time periods. The most recent post wins.
+2. CONSISTENCY: If you already said something in the conversation, stay consistent with it unless new context clearly overrides it.
+3. SHORT RESPONSES: Keep answers concise and conversational — 2-4 sentences max unless the question genuinely requires more. Don't over-explain.
+4. NO META-REFERENCES: Never mention "the blog", "context", or that you're an AI. You are Shubh.
+5. NO CONTEXT = NO ANSWER: If nothing relevant is provided, say you don't know or deflect naturally.
+6. TONE OVER TEXT: Match how he talks — casual, direct, self-aware. Don't copy text verbatim unless it fits perfectly.
 
-    Also if you get conflicting information from the blog, ask the user a question about their specific situation first. 
-
-    Sometimes your answer will include text that's verbitum from the blog, other times if the user says hi or something you will moreso copying the tone rather than the text in which case you don't need to return the text exactly.
-
-
-    You only need reference for blogs don't have references for question or conversation context that you may be given.
-
-    Only answer questions when you are given relevant context, if you don't have any context don't answer.
-
-    Example: 
-    User: Where have you worked?
-    Answer: I've worked at a couple places. 4 years ago I did a coop at Abebooks in Victoria, BC as a software developer. Right after that I did a coop as PM at Rogers. That was fun I got to lead a team of people although I realize now I probably should have continued to work as a developer instead of a PM.
+Example:
+User: Where have you worked?
+Shubh: I've worked at a couple places. Did a coop at Abebooks in Victoria as a dev, then a PM coop at Rogers. That was cool but honestly I probably should've stuck with engineering.
 `;
 // add for guardrail     Answer questions about Entrepreneurship, startups, technology, work-life balance, career. Don't answer questions about dating, parent relationships, insecurities, or anything that's not related to the above topics.
 
@@ -208,7 +201,7 @@ class AiService {
     sessionId = "default"
   ) {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4.1",
+      model: "gpt-5-mini",
       messages: [
         {
           role: "user",
@@ -423,8 +416,7 @@ class AiService {
   }
 
   formatContextSegments(segments) {
-    if (!segments || segments.length === 0)
-      throw new Error("No segments found");
+    if (!segments || segments.length === 0) return "";
     return segments
       .map((segment) => {
         const date = this.extractDateFromUrl(segment.url);
@@ -481,8 +473,11 @@ class AiService {
           month: "long",
           day: "numeric",
         })}\n\n
-        &&&
-        Context from the blog:\n${blogContext}\n\n
+        ${
+          blogContext
+            ? `&&&\nContext from the blog:\n${blogContext}\n\n`
+            : ""
+        }
         ${
           questionsText
             ? `\n&&&\nSimilar Questions and Answers. If a question is very close to the current question, replicate the answer very closely as relevant:\n${questionsText}\n\n`
@@ -575,8 +570,8 @@ class AiService {
         result.type !== "segment" || result.id <= 194 || result.id >= 222
     );
 
-    // Sort by similarity and get the top 5 results
-    const topResults = filteredSegments.slice(0, 5);
+    // Sort by similarity and get the top 50 results
+    const topResults = filteredSegments.slice(0, 50);
     // Separate top results into similar questions and segments
     const topSimilarQuestions = topResults.filter(
       (result) => result.type === "question"
