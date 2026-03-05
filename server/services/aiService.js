@@ -208,7 +208,7 @@ class AiService {
           content: prompt,
         },
       ],
-      max_tokens: 1800,
+      max_completion_tokens: 1800,
     });
 
     return completion.choices[0].message.content;

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import styled from "styled-components";
 // import LoadingDots from "./components/LoadingDots";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
@@ -9,7 +9,6 @@ import { v4 as uuidv4 } from "uuid";
 // Color variables
 const white = "#ffffff";
 const black = "#000000";
-const inputBorderGrey = "#333333";
 const buttonBlue = "#007bff";
 const buttonHoverBlue = "#0056b3";
 
@@ -150,18 +149,6 @@ interface Tool {
 
 type ChatSegment = Message | Tool;
 
-// Add a new interface for SSE update events
-interface UpdateEvent {
-  type: string;
-  message: string;
-  timestamp: Date;
-  content?: string;
-  toolName?: string;
-  toolArgs?: any;
-  error?: any;
-  result?: any;
-}
-
 // Constants
 export const serverUrl =
   process.env.NODE_ENV === "production"
@@ -226,48 +213,6 @@ const LoginButton = styled.button`
   font-size: 16px;
   cursor: pointer;
   margin-top: 20px;
-  transition: background-color 0.3s;
-
-  &:hover {
-    background-color: ${white}cc;
-  }
-`;
-
-const UserInfo = styled.div`
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  z-index: 10;
-`;
-
-const LogoutButton = styled.button`
-  padding: 8px 16px;
-  background-color: ${white}88;
-  border: none;
-  border-radius: 16px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: background-color 0.3s;
-
-  &:hover {
-    background-color: ${white}cc;
-  }
-`;
-
-const PullBlogButton = styled.button`
-  padding: 10px 20px;
-  background-color: ${white}88;
-  border: none;
-  border-radius: 20px;
-  cursor: pointer;
-  font-size: 14px;
-  position: absolute;
-  top: 20px;
-  left: 20px;
-  z-index: 1;
   transition: background-color 0.3s;
 
   &:hover {
@@ -341,42 +286,6 @@ const SubmitButton = styled.button`
   }
 `;
 
-// Simplified processing updates container
-const ProcessingUpdatesContainer = styled.div`
-  position: fixed;
-  bottom: 100px;
-  right: 20px;
-  width: 350px;
-  max-height: 300px;
-  overflow-y: auto;
-  background-color: ${white}88;
-  border-radius: 10px;
-  padding: 10px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  z-index: 100;
-  backdrop-filter: blur(5px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  font-family: "Courier New", monospace;
-  font-size: 12px;
-`;
-
-const UpdateHeader = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-  padding-bottom: 5px;
-  margin-bottom: 5px;
-`;
-
-// Simple update item without complex styling by type
-const UpdateEntry = styled.div`
-  margin-bottom: 8px;
-  padding: 5px;
-  border-radius: 5px;
-  font-size: 12px;
-`;
-
 // New styled components for inline tool updates
 const ToolUpdateContainer = styled.div`
   display: flex;
@@ -440,7 +349,7 @@ const LoadingLetter = styled.span`
 
 // Main Component
 function AppContent() {
-  const { isAuthenticated, isLoading, user, login, logout, checkAuthStatus } =
+  const { isLoading, login, checkAuthStatus } =
     useAuth();
   const [chatSegments, setChatSegments] = useState<ChatSegment[]>([]);
   const [inputMessage, setInputMessage] = useState("");
@@ -461,9 +370,9 @@ function AppContent() {
   };
 
   // Helper function to determine if a segment is a Tool
-  const isTool = (segment: ChatSegment): segment is Tool => {
+  const isTool = useCallback((segment: ChatSegment): segment is Tool => {
     return "toolName" in segment;
-  };
+  }, []);
 
   // Check authentication status when component mounts
   useEffect(() => {
@@ -492,8 +401,124 @@ function AppContent() {
     };
   }, [showTooltip]);
 
+  // Handle SSE messages - defined before connectToSSE so it can be used as a stable dep
+  const handleSSEMessage = useCallback((data: any) => {
+    console.log("sse data:", data);
+    console.log("Current sessionId:", sessionIdRef.current);
+    console.log("data.sessionId:", data.sessionId);
+    console.log(
+      "Match?",
+      data.sessionId === sessionIdRef.current || !data.sessionId
+    );
+
+    if (data.sessionId === sessionIdRef.current || !data.sessionId) {
+      // Handle different types of updates
+      // Note: claude_text is now handled in the POST response, not here
+      if (data.type === "tool_call") {
+        // Create a new tool segment with running status
+        const toolSegment: Tool = {
+          content: data.message || "Running tool...",
+          status: "running",
+          toolName: data.toolName || "unknown_tool",
+          isAI: true,
+          timestamp: new Date(),
+        };
+        console.log("toolSegment:", toolSegment);
+        setChatSegments((prev) => [...prev, toolSegment]);
+      } else if (data.type === "tool_success") {
+        // Find the last matching tool call and update its status
+        // or create a new tool segment with success status
+        console.log("tool_success:", data);
+        setChatSegments((prevSegments) => {
+          const newSegments = [...prevSegments];
+          let toolUpdated = false;
+
+          // Try to find matching tool call to update
+          for (let i = newSegments.length - 1; i >= 0; i--) {
+            const segment = newSegments[i];
+            if (
+              isTool(segment) &&
+              segment.toolName === data.toolName &&
+              segment.status === "running"
+            ) {
+              newSegments[i] = {
+                ...segment,
+                status: "success" as const,
+                content: data.message || "Tool completed successfully",
+              };
+              toolUpdated = true;
+              break;
+            }
+          }
+
+          // If no matching tool found, create a new tool segment
+          if (!toolUpdated) {
+            newSegments.push({
+              content: data.message || "Tool completed successfully",
+              status: "success" as const,
+              toolName: data.toolName || "unknown_tool",
+              isAI: true,
+              timestamp: new Date(),
+            });
+          }
+
+          return newSegments;
+        });
+      } else if (data.type === "tool_error") {
+        // Find the last matching tool call and update its status
+        // or create a new tool segment with error status
+        console.log("tool_error:", data);
+        setChatSegments((prevSegments) => {
+          const newSegments = [...prevSegments];
+          let toolUpdated = false;
+
+          // Try to find matching tool call to update
+          for (let i = newSegments.length - 1; i >= 0; i--) {
+            const segment = newSegments[i];
+            if (
+              isTool(segment) &&
+              segment.toolName === data.toolName &&
+              segment.status === "running"
+            ) {
+              newSegments[i] = {
+                ...segment,
+                status: "error" as const,
+                content: data.message || "Tool failed",
+                error:
+                  typeof data.error === "string"
+                    ? data.error
+                    : "Execution failed",
+              };
+              toolUpdated = true;
+              break;
+            }
+          }
+
+          // If no matching tool found, create a new tool segment
+          if (!toolUpdated) {
+            newSegments.push({
+              content: data.message || "Tool failed",
+              status: "error" as const,
+              toolName: data.toolName || "unknown_tool",
+              isAI: true,
+              error:
+                typeof data.error === "string"
+                  ? data.error
+                  : "Execution failed",
+              timestamp: new Date(),
+            });
+          }
+
+          return newSegments;
+        });
+      } else {
+        console.error("Error no type found: ", data);
+      }
+    }
+  }, [isTool]);
+
   // Add a function to connect to SSE
-  const connectToSSE = () => {
+  const connectToSSE = useCallback(() => {
     // Close any existing connection
     if (sseRef.current) {
       sseRef.current.close();
@@ -539,7 +564,7 @@ function AppContent() {
         sseRef.current = null;
       }
     };
-  };
+  }, [handleSSEMessage]);
 
   // Connect to SSE when component mounts, but only in development
   useEffect(() => {
@@ -551,16 +576,7 @@ function AppContent() {
         sseRef.current.close();
       }
     };
-  }, []);
-
-  // Format timestamp for display
-  const formatTimestamp = (date: Date) => {
-    return date.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
-  };
+  }, [connectToSSE]);
 
   if (isLoading) {
     return (
@@ -755,121 +771,6 @@ function AppContent() {
     );
   };
 
-  // Modified function to handle the SSE message - each event creates a new message
-  const handleSSEMessage = (data: any) => {
-    console.log("sse data:", data);
-    console.log("Current sessionId:", sessionIdRef.current);
-    console.log("data.sessionId:", data.sessionId);
-    console.log(
-      "Match?",
-      data.sessionId === sessionIdRef.current || !data.sessionId
-    );
-
-    if (data.sessionId === sessionIdRef.current || !data.sessionId) {
-      // Handle different types of updates
-      // Note: claude_text is now handled in the POST response, not here
-      if (data.type === "tool_call") {
-        // Create a new tool segment with running status
-        const toolSegment: Tool = {
-          content: data.message || "Running tool...",
-          status: "running",
-          toolName: data.toolName || "unknown_tool",
-          isAI: true,
-          timestamp: new Date(),
-        };
-        console.log("toolSegment:", toolSegment);
-        setChatSegments((prev) => [...prev, toolSegment]);
-      } else if (data.type === "tool_success") {
-        // Find the last matching tool call and update its status
-        // or create a new tool segment with success status
-        console.log("tool_success:", data);
-        setChatSegments((prevSegments) => {
-          const newSegments = [...prevSegments];
-          let toolUpdated = false;
-
-          // Try to find matching tool call to update
-          for (let i = newSegments.length - 1; i >= 0; i--) {
-            const segment = newSegments[i];
-            if (
-              isTool(segment) &&
-              segment.toolName === data.toolName &&
-              segment.status === "running"
-            ) {
-              newSegments[i] = {
-                ...segment,
-                status: "success" as const,
-                content: data.message || "Tool completed successfully",
-              };
-              toolUpdated = true;
-              break;
-            }
-          }
-
-          // If no matching tool found, create a new tool segment
-          if (!toolUpdated) {
-            newSegments.push({
-              content: data.message || "Tool completed successfully",
-              status: "success" as const,
-              toolName: data.toolName || "unknown_tool",
-              isAI: true,
-              timestamp: new Date(),
-            });
-          }
-
-          return newSegments;
-        });
-      } else if (data.type === "tool_error") {
-        // Find the last matching tool call and update its status
-        // or create a new tool segment with error status
-        console.log("tool_error:", data);
-        setChatSegments((prevSegments) => {
-          const newSegments = [...prevSegments];
-          let toolUpdated = false;
-
-          // Try to find matching tool call to update
-          for (let i = newSegments.length - 1; i >= 0; i--) {
-            const segment = newSegments[i];
-            if (
-              isTool(segment) &&
-              segment.toolName === data.toolName &&
-              segment.status === "running"
-            ) {
-              newSegments[i] = {
-                ...segment,
-                status: "error" as const,
-                content: data.message || "Tool failed",
-                error:
-                  typeof data.error === "string"
-                    ? data.error
-                    : "Execution failed",
-              };
-              toolUpdated = true;
-              break;
-            }
-          }
-
-          // If no matching tool found, create a new tool segment
-          if (!toolUpdated) {
-            newSegments.push({
-              content: data.message || "Tool failed",
-              status: "error" as const,
-              toolName: data.toolName || "unknown_tool",
-              isAI: true,
-              error:
-                typeof data.error === "string"
-                  ? data.error
-                  : "Execution failed",
-              timestamp: new Date(),
-            });
-          }
-
-          return newSegments;
-        });
-      } else {
-        console.error("Error no type found: ", data);
-      }
-    }
-  };
 
   return (
     <AppContainer theme={{ safeMode }}>
